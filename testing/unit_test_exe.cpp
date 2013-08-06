@@ -314,12 +314,17 @@ int main() {
 		fputs(fu.get().c_str(), stderr);
 	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
 		})
-		.then(false,[done](future<void> f)mutable{
+		.then(true,[done](future<void> f)mutable{
 			f.get();
 			std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
 				<< "We are in thread " << uv_thread_self() << "\n";
 
 			done.set();
+
+			char buf[100];
+			uv_fs_t read_req;
+			uv_fs_read(uv_default_loop(), &read_req, 0, &buf[0], sizeof(buf), 0, nullptr);
+
 		});
 
 		assert(fut.ready() == false);
