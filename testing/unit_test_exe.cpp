@@ -25,6 +25,8 @@ namespace{
 #include <thread>
 
 #include <thread>
+#include <condition_variable>
+#include <mutex>
 #include <chrono>
 #include <type_traits>
 #include <cppcomponents/cppcomponents.hpp>
@@ -100,6 +102,25 @@ struct storage_and_error{
 		return *static_cast<const T*>(data);
 	}
 
+
+	void set_error(cppcomponents::error_code ec){
+		error_ = ec;
+		finished_.store(true);
+	}
+
+	void set(T t){
+		try{
+			void* data = &storage_;
+			new(data) T(std::move(t));
+			storage_initialized_.store(true);
+
+		}
+		catch (std::exception& e){
+			error_ = cppcomponents::error_mapper::error_code_from_exception(e);
+		}
+		finished_.store(true);
+	}
+
 	~storage_and_error(){
 		if (storage_initialized_.load()){
 			void* data = &storage_;
@@ -144,6 +165,13 @@ struct storage_and_error<void>{
 		}
 		cppcomponents::throw_if_error(error_);
 
+	}
+	void set(){
+		finished_.store(true);
+	}
+	void set_error(cppcomponents::error_code ec){
+		error_ = ec;
+		finished_.store(true);
 	}
 
 	void get()const{
@@ -305,6 +333,73 @@ struct future_move<D, void>{
 };
 
 template<class T>
+struct value_waiter_helper {
+
+	mutable std::mutex mu_;
+	mutable std::condition_variable cond_var_;
+
+	storage_and_error<T> storage_;
+
+	T get(){
+		std::unique_lock<std::mutex> lk(mu_);
+		cond_var_.wait(lk, [this](){return storage_.finished(); });
+		return storage_.get();
+	}
+
+	void set(T t){
+		std::unique_lock<std::mutex> lk(mu_);
+		storage_.set(std::move(t));
+		cond_var_.notify_all();
+	}
+
+
+
+
+};
+template<>
+struct value_waiter_helper<void> {
+
+	mutable std::mutex mu_;
+	mutable std::condition_variable cond_var_;
+
+	storage_and_error<void> storage_;
+
+	void get()const {
+		std::unique_lock<std::mutex> lk(mu_);
+		cond_var_.wait(lk, [this](){return storage_.finished(); });
+		return storage_.get();
+	}
+
+	void set(){
+		std::unique_lock<std::mutex> lk(mu_);
+		storage_.set();
+		cond_var_.notify_all();
+	}
+
+
+
+
+};
+
+template<class T>
+struct value_waiter{
+	typedef value_waiter_helper<T> v_t;
+	std::shared_ptr<v_t> p_;
+
+	value_waiter():p_(std::make_shared<v_t>()){}
+	value_waiter(std::shared_ptr<v_t> p) : p_(p){}
+
+	T get()const{
+		return p_->get();
+	}
+
+	void set(T t){
+		p_->set(std::move(t));
+	}
+
+};
+
+template<class T>
 class future:future_move<future<T>,T>{
 	typedef work<T> w_t;
 	std::shared_ptr<w_t> pw_;
@@ -381,11 +476,10 @@ int main() {
 		print_tid("In then");
 		return 0;
 	});
-
-	future<long> fut([](){return fib(15); });
-	fut
-	.then([](future<long> fu){
-		auto f = fu.get();
+	value_waiter<long> waiter;
+	future<void> fut([waiter]()mutable{waiter.set(fib(15)); });
+	future<void>([waiter](){
+		auto f = waiter.get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
 		print_tid("In then");
 
