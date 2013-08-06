@@ -469,7 +469,7 @@ struct value_waiter{
 	typedef value_waiter_helper<T> v_t;
 	std::shared_ptr<v_t> p_;
 
-	value_waiter():p_(std::make_shared<v_t>()){}
+	value_waiter() : p_(std::make_shared<v_t>()){}
 	value_waiter(std::shared_ptr<v_t> p) : p_(p){}
 
 	T get()const{
@@ -478,6 +478,24 @@ struct value_waiter{
 
 	void set(T t){
 		p_->set(std::move(t));
+	}
+
+};
+
+template<>
+struct value_waiter<void>{
+	typedef value_waiter_helper<void> v_t;
+	std::shared_ptr<v_t> p_;
+
+	value_waiter() : p_(std::make_shared<v_t>()){}
+	value_waiter(std::shared_ptr<v_t> p) : p_(p){}
+
+	void get()const{
+		return p_->get();
+	}
+
+	void set(){
+		p_->set();
 	}
 
 };
@@ -496,6 +514,9 @@ public:
 	template<class F>
 	future(F f) : pw_(std::make_shared<w_t>(f)){
 		pw_->start();
+	}
+	future(value_waiter<T> w) : pw_(std::make_shared<w_t>([w](){return w.get();})){
+			pw_->start();
 	}
 
 
@@ -560,9 +581,9 @@ int main() {
 		return 0;
 	});
 	value_waiter<long> waiter;
-	future<void> fut([waiter]()mutable{waiter.set(fib(15)); });
-	future<void>([waiter](){
-		auto f = waiter.get();
+	future<long> fut(waiter);
+	fut.then([](future<long> fut){
+		auto f = fut.get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
 		print_tid("In then");
 
@@ -575,6 +596,7 @@ int main() {
 	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
 		});
 
+		future<void>([waiter]()mutable{waiter.set(fib(15)); });
 	return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
 }
