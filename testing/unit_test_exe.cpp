@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <cppcomponents/cppcomponents.hpp>
 #include <memory>
+#include <sstream>
 
 #define FIB_UNTIL 25
 //uv_loop_t *loop;
@@ -116,10 +117,11 @@ struct work:std::enable_shared_from_this<work<T>>{
 			}
 
 		}
-		w.shared_self_ = nullptr;
 	}
 
 	static void after_work_cb(uv_work_t* req, int status){
+		auto& w = *static_cast<work*>(req->data);
+		w.shared_self_ = nullptr;
 	}
 
 	~work(){
@@ -150,7 +152,13 @@ long fib(int n) {
 void after_fib(uv_work_t *req, int status) {
 	fprintf(stderr, "Done calculating %dth fibonacci\n", *(int *) req->data);
 }
-
+void print_tid(){
+	std::stringstream s;
+	s << std::this_thread::get_id();
+	int tid;
+	s >> tid;
+	fprintf(stderr, "On thread id %d\n", tid);
+}
 int main() {
 	//loop = uv_default_loop();
 	auto w = std::make_shared<work<long>>([](){return fib(12); });
@@ -158,6 +166,7 @@ int main() {
 	w->then([](std::shared_ptr < work < long >> w){
 		auto f = w->get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 12,f);
+		print_tid();
 		return 0;
 	});
 
