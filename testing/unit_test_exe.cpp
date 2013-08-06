@@ -293,16 +293,18 @@ struct future_move<D, void>{
 };
 
 template<class T>
-struct future:future_move<future<T>,T>{
+class future:future_move<future<T>,T>{
 	typedef work<T> w_t;
 	std::shared_ptr<w_t> pw_;
 
+	friend struct future_move<future<T>, T>;
+public:
+	future(std::shared_ptr < work < T >> p) : pw_(p){}
 	template<class F>
 	future(F f) : pw_(std::make_shared<w_t>(f)){
 		pw_->start();
 	}
 
-	future(std::shared_ptr < work < T >> p) : pw_(p){}
 
 	template<class F>
 	auto then(bool run_on_default_loop, F f)->future < decltype(f(future(pw_))) > {
