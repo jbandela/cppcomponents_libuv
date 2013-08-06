@@ -227,10 +227,7 @@ class future:future_move<future<T>,T>{
 
 	friend struct future_move<future<T>, T>;
 public:
-	future(std::shared_ptr < work < T >> p) : pw_(p){
-		
-		//pw_->set_shared_self();
-	}
+	future(std::shared_ptr < work < T >> p) : pw_(p){}
 	template<class F>
 	future(F f) : pw_(std::make_shared<w_t>(f)){
 		pw_->start();
@@ -298,10 +295,10 @@ int main() {
 
 	value_waiter<long> waiter;
 	value_waiter<void> done;
-	//future<long> fut(waiter);
+	future<long> fut(waiter);
 	//	future<void>([waiter]()mutable{waiter.set(fib(15)); });
 	//	waiter = value_waiter<long>();
-	future<long> fut([](){return fib(15); });
+	//future<long> fut([](){return fib(15); });
 	auto fut2 = fut.then(true,[](future<long> fut){
 		assert(fut.ready());
 		auto f = fut.get();
@@ -317,7 +314,7 @@ int main() {
 		fputs(fu.get().c_str(), stderr);
 	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
 		})
-		.then(true,[done](future<void> f)mutable{
+		.then(false,[done](future<void> f)mutable{
 			f.get();
 			std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
 				<< "We are in thread " << uv_thread_self() << "\n";
@@ -325,7 +322,8 @@ int main() {
 			done.set();
 		});
 
-		//assert(fut.ready() == false);
+		assert(fut.ready() == false);
+			future<void>([waiter]()mutable{waiter.set(fib(15)); });
 
 
 		std::cout << "Cout at the beginning\n";
