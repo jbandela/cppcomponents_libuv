@@ -52,7 +52,7 @@ struct work:std::enable_shared_from_this<work<T>>{
 		if (!finished_.load()){
 			throw std::runtime_error("Operation not finished");
 		}
-		cppcomponents::throw_if_error(e);
+		cppcomponents::throw_if_error(error_);
 		if (!storage_initialized_.load()){
 			throw std::runtime_error("Storage not initialized");
 		}
@@ -62,7 +62,8 @@ struct work:std::enable_shared_from_this<work<T>>{
 		check_get(); 
 
 		void* data = &storage_;
-		return *static_cast<T*>(data);
+		auto& ret = *static_cast<T*>(data);
+		return ret;
 	}
 	const T& get()const{
 		check_get();
@@ -115,11 +116,10 @@ struct work:std::enable_shared_from_this<work<T>>{
 			}
 
 		}
+		w.shared_self_ = nullptr;
 	}
 
 	static void after_work_cb(uv_work_t* req, int status){
-		auto& w = *static_cast<work*>(req->data);
-		w.shared_self_ = nullptr;
 	}
 
 	~work(){
@@ -145,7 +145,6 @@ long fib(int n) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(3));
 	long f = fib_(n);
 	return f;
-	fprintf(stderr, "%dth fibonacci is %lu\n", n, fib);
 }
 
 void after_fib(uv_work_t *req, int status) {
@@ -157,7 +156,8 @@ int main() {
 	auto w = std::make_shared<work<long>>([](){return fib(12); });
 	w->start();
 	w->then([](std::shared_ptr < work < long >> w){
-		fprintf(stderr, "%dth fibonacci is %lu\n", 12, w.get());
+		auto f = w->get();
+		fprintf(stderr, "%dth fibonacci is %lu\n", 12,f);
 		return 0;
 	});
 
