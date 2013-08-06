@@ -12,9 +12,18 @@
 #include <cppcomponents/cppcomponents.hpp>
 #include <memory>
 #include <sstream>
+#include <string>
 
 #define FIB_UNTIL 25
 //uv_loop_t *loop;
+
+
+void print_tid(const std::string& str  = "On Thread "){
+	std::stringstream s;
+	s << str << " " << std::this_thread::get_id() << "\n";
+
+	fputs(s.str().c_str(),stderr);
+}
 
 template<class T>
 struct work:std::enable_shared_from_this<work<T>>{
@@ -47,6 +56,10 @@ struct work:std::enable_shared_from_this<work<T>>{
 		shared_self_ = this->shared_from_this();
 		uv_queue_work(uv_default_loop(), &w_, do_work, after_work_cb);
 	}
+	void start_on_default_loop(){
+		shared_self_ = this->shared_from_this();
+		uv_queue_work(uv_default_loop(), &w_, do_no_work, work_on_default_loop);
+	}
 
 
 	void check_get(){
@@ -73,7 +86,7 @@ struct work:std::enable_shared_from_this<work<T>>{
 	}
 
 	template<class TF>
-	auto then(TF f)->std::shared_ptr<work<decltype(f(shared_self_))>>{
+	auto then(bool use_default_loop,TF f)->std::shared_ptr<work<decltype(f(shared_self_))>>{
 		if (then_added_){
 			throw std::runtime_error("Then called more than once");
 		}
@@ -84,8 +97,13 @@ struct work:std::enable_shared_from_this<work<T>>{
 			return f(self_);
 
 		});
-		then_ = [pw](){
-			pw->start();
+		then_ = [pw, use_default_loop](){
+			if (use_default_loop){
+				pw->start_on_default_loop();
+			}
+			else{
+				pw->start();
+			}
 		};
 		has_then_.test_and_set();
 		if (finished_.load()){
@@ -98,6 +116,10 @@ struct work:std::enable_shared_from_this<work<T>>{
 		return pw;
 	}
 
+	template<class TF>
+	auto then(TF f)->decltype(then(false, f)){
+		return then(false, f);
+	}
 	static void do_work(uv_work_t* wt){
 		auto& w = *static_cast<work*>(wt->data);
 		void* data = &w.storage_;
@@ -119,10 +141,22 @@ struct work:std::enable_shared_from_this<work<T>>{
 		}
 	}
 
+	
+
 	static void after_work_cb(uv_work_t* req, int status){
 		auto& w = *static_cast<work*>(req->data);
 		w.shared_self_ = nullptr;
+		print_tid("In after work");
 	}
+
+	// For then on main loop
+	static void do_no_work(uv_work_t*){}
+
+	static void work_on_default_loop(uv_work_t* req, int status){
+		do_work(req);
+		after_work_cb(req, status);
+	}
+
 
 	~work(){
 		if (storage_initialized_.load()){
@@ -152,21 +186,16 @@ long fib(int n) {
 void after_fib(uv_work_t *req, int status) {
 	fprintf(stderr, "Done calculating %dth fibonacci\n", *(int *) req->data);
 }
-void print_tid(){
-	std::stringstream s;
-	s << std::this_thread::get_id();
-	int tid;
-	s >> tid;
-	fprintf(stderr, "On thread id %d\n", tid);
-}
+
 int main() {
 	//loop = uv_default_loop();
+	print_tid("Main thread");
 	auto w = std::make_shared<work<long>>([](){return fib(12); });
 	w->start();
-	w->then([](std::shared_ptr < work < long >> w){
+	w->then(true,[](std::shared_ptr < work < long >> w){
 		auto f = w->get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 12,f);
-		print_tid();
+		print_tid("In then");
 		return 0;
 	});
 
