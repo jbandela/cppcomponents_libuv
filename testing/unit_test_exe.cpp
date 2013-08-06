@@ -185,9 +185,18 @@ struct work_move<D,void>{
 
 std::atomic<int> work_count{0};
 
+struct default_loop_ref_unref{
+	uv_work_t* w_;
+	default_loop_ref_unref(uv_work_t& w):w_(&w){
+		uv_ref((uv_handle_t*) w_);
+	}	
+	~default_loop_ref_unref(){
+		uv_unref((uv_handle_t*) w_);
+	}
+};
+
 template<class T>
 struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
-
 	uv_work_t w_;
 	std::atomic_flag then_called_;
 	std::atomic<bool> has_then_;
@@ -202,14 +211,15 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 	bool then_added_;
 
+	uv_async_t async_;
 
 	template<class F>
 	work(F f)
-		: w_{}, then_called_{ ATOMIC_FLAG_INIT },
+		: w_{},then_called_{ ATOMIC_FLAG_INIT },
 		has_then_{ false }, worker(f), then_added_(false), started_(false)
 	{
 		w_.data = this;
-		++work_count;
+		fprintf(stderr, "Work constructor %d\n", work_count.fetch_add(1) + 1);
 	}
 
 	void set_shared_self(){
@@ -217,15 +227,33 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 	}
 
+	static void do_queue_start(uv_async_t *handle, int status /*UNUSED*/){
+		auto i = uv_thread_self();
+		void* data = handle->data;
+		auto& w = *static_cast<work*>(data);
+		uv_queue_work(uv_default_loop(), &w.w_, do_work, after_work_cb);
+	}
+	static void do_queue_start_on_default(uv_async_t *handle, int status /*UNUSED*/){
+		auto i = uv_thread_self();
+		void* data = handle->data;
+		auto& w = *static_cast<work*>(data);
+		uv_queue_work(uv_default_loop(), &w.w_, do_no_work, work_on_default_loop);
+
+	}
+
 	void start(){
 		set_shared_self();
 		started_.store(true);
-		uv_queue_work(uv_default_loop(), &w_, do_work, after_work_cb);
+		uv_async_init(uv_default_loop(),&async_,do_queue_start);
+		async_.data = this;
+		uv_async_send(&async_);
 	}
 	void start_on_default_loop(){
 		set_shared_self();
 		started_.store(true);
-		uv_queue_work(uv_default_loop(), &w_, do_no_work, work_on_default_loop);
+		uv_async_init(uv_default_loop(), &async_, do_queue_start_on_default);
+		async_.data = this;
+		uv_async_send(&async_);
 	}
 
 
@@ -253,7 +281,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 		});
 		then_ = [pw, use_default_loop](){
-			if (use_default_loop){
+			if (false&&use_default_loop){
 				pw->start_on_default_loop();
 			}
 			else{
@@ -296,7 +324,8 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 	}
 
 	// For then on main loop
-	static void do_no_work(uv_work_t*){}
+	static void do_no_work(uv_work_t*){
+	}
 
 	static void work_on_default_loop(uv_work_t* req, int status){
 		do_work(req);
@@ -305,7 +334,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 
 	~work(){
-		--work_count;
+		fprintf(stderr,"Work destructor %d\n",work_count.fetch_sub(1));
 	}
 };
 
@@ -576,35 +605,37 @@ int main() {
 
 	value_waiter<long> waiter;
 	value_waiter<void> done;
-	future<long> fut(waiter);
-	fut.then([](future<long> fut){
-		assert(fut.ready());
-		auto f = fut.get();
-		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
+	//future<long> fut(waiter);
+	//	future<void>([waiter]()mutable{waiter.set(fib(15)); });
+	//	waiter = value_waiter<long>();
+	future<long> fut([](){return fib(15); });
+	//fut.then([](future<long> fut){
+	//	assert(fut.ready());
+	//	auto f = fut.get();
+	//	fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
 
-	})
-	.then([](future<void> fu){
-		return std::string("Hello World");})
-	.then([](future<std::string> fu){
-		auto s = fu.get();
-		fputs(fu.get().c_str(), stderr);
-	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
-		})
-		.then(false,[done](future<void> f)mutable{
-			f.get();
-			std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
-				<< "We are in thread " << uv_thread_self() << "\n";
+	//})
+	//.then([](future<void> fu){
+	//	return std::string("Hello World");})
+	//.then([](future<std::string> fu){
+	//	auto s = fu.get();
+	//	fputs(fu.get().c_str(), stderr);
+	//fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
+	//	});
+		//.then(true,[done](future<void> f)mutable{
+		//	f.get();
+		//	std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
+		//		<< "We are in thread " << uv_thread_self() << "\n";
 
-			done.set();
-		});
+		//	//done.set();
+		//});
 
-		assert(fut.ready() == false);
+		//assert(fut.ready() == false);
 
 
 		std::cout << "Cout at the beginning\n";
-		future<void>([waiter]()mutable{waiter.set(fib(15)); });
 	auto ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-	done.get();
+	//done.get();
 	return ret;
 
 }
