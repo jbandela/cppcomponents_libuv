@@ -22,17 +22,12 @@ namespace{
 #include <stdio.h>
 #include <stdlib.h>
 #include <atomic>
-#include <thread>
-
-#include <thread>
-#include <condition_variable>
-#include <mutex>
-#include <chrono>
 #include <type_traits>
 #include <cppcomponents/cppcomponents.hpp>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <iostream>
 
 #define FIB_UNTIL 25
 //uv_loop_t *loop;
@@ -548,7 +543,7 @@ public:
 		return pw_->get();
 	}
 
-	bool ready(){
+	bool ready()const{
 		return pw_->ready();
 	}
 
@@ -588,14 +583,7 @@ int main() {
 
 	//loop = uv_default_loop();
 	print_tid("Main thread");
-	auto w = std::make_shared<work<long>>([](){return fib(12); });
-	w->start();
-	w->then(true,[](std::shared_ptr < work < long >> w){
-		auto f = w->get();
-		fprintf(stderr, "%dth fibonacci is %lu\n", 12,f);
-		print_tid("In then");
-		return 0;
-	});
+
 	value_waiter<long> waiter;
 	future<long> fut(waiter);
 	fut.then([](future<long> fut){
@@ -611,10 +599,16 @@ int main() {
 		auto s = fu.get();
 		fputs(fu.get().c_str(), stderr);
 	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
+		})
+		.then(true,[](future<void>){
+			std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
+				<< "We are in thread " << uv_thread_self() << "\n";
 		});
 
 		assert(fut.ready() == false);
 
+
+		std::cout << "Cout at the beginning\n";
 		future<void>([waiter]()mutable{waiter.set(fib(15)); });
 	return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 
