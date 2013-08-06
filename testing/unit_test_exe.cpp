@@ -29,16 +29,8 @@ namespace{
 #include <string>
 #include <iostream>
 
-#define FIB_UNTIL 25
-//uv_loop_t *loop;
 
 
-void print_tid(const std::string& str  = "On Thread "){
-	std::stringstream s;
-	s << str << " " << uv_thread_self() << "\n";
-
-	fputs(s.str().c_str(),stderr);
-}
 
 template<class T>
 struct storage_and_error{
@@ -301,7 +293,6 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 	static void after_work_cb(uv_work_t* req, int status){
 		auto& w = *static_cast<work*>(req->data);
 		w.shared_self_ = nullptr;
-		print_tid("In after work");
 	}
 
 	// For then on main loop
@@ -581,8 +572,7 @@ wc_printer pr_;
 int main() {
 
 
-	//loop = uv_default_loop();
-	print_tid("Main thread");
+	std::cout << "main thread is thread " << uv_thread_self() << "\n";
 
 	value_waiter<long> waiter;
 	future<long> fut(waiter);
@@ -590,7 +580,6 @@ int main() {
 		assert(fut.ready());
 		auto f = fut.get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
-		print_tid("In then");
 
 	})
 	.then([](future<void> fu){
