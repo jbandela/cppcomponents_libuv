@@ -168,14 +168,17 @@ struct work_move<D,void>{
 
 };
 
+std::atomic<int> work_count = 0;
+
 template<class T>
 struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 	uv_work_t w_;
 	std::atomic_flag then_called_;
-	std::atomic_flag has_then_;
+	std::atomic<bool> has_then_;
 	std::function < void()> then_;
 	std::function < T()> worker;
+	std::atomic<bool> started_;
 
 
 	storage_and_error<T> storage_;
@@ -188,17 +191,25 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 	template<class F>
 	work(F f)
 		: w_{}, then_called_{ ATOMIC_FLAG_INIT },
-		has_then_{ ATOMIC_FLAG_INIT }, worker(f),  then_added_(false)
+		has_then_{ false }, worker(f), then_added_(false), started_(false)
 	{
 		w_.data = this;
+		++work_count;
+	}
+
+	void set_shared_self(){
+		shared_self_ = this->shared_from_this();
+
 	}
 
 	void start(){
-		shared_self_ = this->shared_from_this();
+		set_shared_self();
+		started_.store(true);
 		uv_queue_work(uv_default_loop(), &w_, do_work, after_work_cb);
 	}
 	void start_on_default_loop(){
-		shared_self_ = this->shared_from_this();
+		set_shared_self();
+		started_.store(true);
 		uv_queue_work(uv_default_loop(), &w_, do_no_work, work_on_default_loop);
 	}
 
@@ -211,6 +222,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 	template<class TF>
 	auto then(bool use_default_loop,TF f)->std::shared_ptr<work<decltype(f(shared_self_))>>{
+		assert(shared_self_.get());
 		if (then_added_){
 			throw std::runtime_error("Then called more than once");
 		}
@@ -229,7 +241,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 				pw->start();
 			}
 		};
-		has_then_.test_and_set();
+		has_then_.store(true);
 		if (storage_.finished()){
 			if (then_called_.test_and_set() == false){
 				then_();
@@ -248,7 +260,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 		auto& w = *static_cast<work*>(wt->data);
 		w.storage_.do_assign(w.worker);
 
-		if (w.has_then_.test_and_set()){
+		if (w.has_then_.load()){
 			if (w.then_called_.test_and_set()==false){
 				w.then_();		
 				w.then_ = [](){};
@@ -275,7 +287,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 
 	~work(){
-
+		--work_count;
 	}
 };
 
@@ -299,7 +311,10 @@ class future:future_move<future<T>,T>{
 
 	friend struct future_move<future<T>, T>;
 public:
-	future(std::shared_ptr < work < T >> p) : pw_(p){}
+	future(std::shared_ptr < work < T >> p) : pw_(p){
+		
+		pw_->set_shared_self();
+	}
 	template<class F>
 	future(F f) : pw_(std::make_shared<w_t>(f)){
 		pw_->start();
@@ -309,7 +324,8 @@ public:
 	template<class F>
 	auto then(bool run_on_default_loop, F f)->future < decltype(f(future(pw_))) > {
 		return pw_->then(run_on_default_loop, [f](std::shared_ptr<w_t> w){
-			return f(future(w));
+			future fut(w);
+			return f(fut);
 		});
 	}
 	template<class F>
@@ -343,7 +359,18 @@ void after_fib(uv_work_t *req, int status) {
 	fprintf(stderr, "Done calculating %dth fibonacci\n", *(int *) req->data);
 }
 
+struct wc_printer{
+	~wc_printer(){
+		fprintf(stderr, "\nFinal work count = %d\n", work_count.load());
+
+	}
+};
+
+wc_printer pr_;
+
 int main() {
+
+
 	//loop = uv_default_loop();
 	print_tid("Main thread");
 	auto w = std::make_shared<work<long>>([](){return fib(12); });
@@ -356,12 +383,21 @@ int main() {
 	});
 
 	future<long> fut([](){return fib(15); });
-	fut.then([](future<long> fu){
+	fut
+	.then([](future<long> fu){
 		auto f = fu.get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
 		print_tid("In then");
 
-	});
+	})
+	.then([](future<void> fu){
+		return std::string("Hello World");})
+	.then([](future<std::string> fu){
+		auto s = fu.get();
+		fputs(fu.get().c_str(), stderr);
+	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
+		});
 
 	return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+
 }
