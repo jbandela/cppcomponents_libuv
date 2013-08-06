@@ -332,48 +332,131 @@ struct future_move<D, void>{
 
 };
 
+
+struct mutex{
+
+	mutable uv_mutex_t mu_;
+	mutex(){
+		uv_mutex_init(&mu_);
+	}
+	~mutex(){
+		uv_mutex_destroy(&mu_);
+	}
+
+	void lock(){
+		uv_mutex_lock(&mu_);
+	}
+
+	int trylock(){
+		return uv_mutex_trylock(&mu_);
+	}
+
+	void unlock(){
+		uv_mutex_unlock(&mu_);
+	}
+
+	uv_mutex_t* native()const {
+		return &mu_;
+	}
+
+};
+
+struct lock{
+
+	mutex& mu_;
+
+	lock(mutex& m) : mu_(m){
+		mu_.lock();
+	}
+	~lock(){
+		mu_.unlock();
+	}
+
+	mutex& get_mutex(){
+		return mu_;
+	}
+
+};
+
+struct condition_variable{
+
+	uv_cond_t cond_;
+
+	condition_variable(){
+		uv_cond_init(&cond_);
+	}
+
+	~condition_variable(){
+		uv_cond_destroy(&cond_);
+	}
+
+	void wait(lock& lk){
+		uv_cond_wait(&cond_, lk.get_mutex().native());
+	}
+	template<class Pred>
+	void wait(lock& lk,Pred pred){
+		while (!pred()){
+			uv_cond_wait(&cond_, lk.get_mutex().native());
+
+		}
+	}
+
+	int timedwait(std::uint64_t n,lock& lk){
+		return uv_cond_timedwait(&cond_, lk.get_mutex().native(),n);
+	}
+
+	void signal(){
+		uv_cond_signal(&cond_);
+	}
+
+	void broadcast(){
+		uv_cond_broadcast(&cond_);
+	}
+};
+
 template<class T>
 struct value_waiter_helper {
 
-	mutable std::mutex mu_;
-	mutable std::condition_variable cond_var_;
+	mutable mutex mu_;
+	mutable condition_variable cond_var_;
 
 	storage_and_error<T> storage_;
 
 	T get(){
-		std::unique_lock<std::mutex> lk(mu_);
+		lock lk(mu_);
 		cond_var_.wait(lk, [this](){return storage_.finished(); });
 		return storage_.get();
 	}
 
 	void set(T t){
-		std::unique_lock<std::mutex> lk(mu_);
+		lock lk(mu_);
 		storage_.set(std::move(t));
-		cond_var_.notify_all();
+		cond_var_.broadcast();
 	}
 
 
 
 
 };
+
 template<>
 struct value_waiter_helper<void> {
 
-	mutable std::mutex mu_;
-	mutable std::condition_variable cond_var_;
+	mutable mutex mu_;
+	mutable condition_variable cond_var_;
 
 	storage_and_error<void> storage_;
 
 	void get()const {
-		std::unique_lock<std::mutex> lk(mu_);
+		lock lk(mu_);
 		cond_var_.wait(lk, [this](){return storage_.finished(); });
 		return storage_.get();
 	}
 
 	void set(){
-		std::unique_lock<std::mutex> lk(mu_);
+		lock lk(mu_);
 		storage_.set();
-		cond_var_.notify_all();
+		cond_var_.broadcast();
 	}
 
 
