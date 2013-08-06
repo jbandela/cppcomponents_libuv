@@ -168,7 +168,7 @@ struct work_move<D,void>{
 
 };
 
-std::atomic<int> work_count = 0;
+std::atomic<int> work_count{0};
 
 template<class T>
 struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
