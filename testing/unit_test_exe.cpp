@@ -247,6 +247,10 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 	}
 
 
+	bool ready()const{
+		return storage_.finished();
+	}
+
 
 	template<class TF>
 	auto then(bool use_default_loop,TF f)->std::shared_ptr<work<decltype(f(shared_self_))>>{
@@ -430,11 +434,19 @@ struct value_waiter_helper {
 
 	void set(T t){
 		lock lk(mu_);
+		// Only allow 1 store
+		if (storage_.finished()) return; 
 		storage_.set(std::move(t));
 		cond_var_.broadcast();
 	}
 
-
+	void set_error(cppcomponents::error_code ec){
+		lock lk(mu_);
+		// Only allow 1 store
+		if (storage_.finished()) return;
+		storage_.set_error(ec);
+		cond_var_.broadcast();
+	}
 
 
 };
@@ -536,6 +548,10 @@ public:
 		return pw_->get();
 	}
 
+	bool ready(){
+		return pw_->ready();
+	}
+
 
 };
 
@@ -583,6 +599,7 @@ int main() {
 	value_waiter<long> waiter;
 	future<long> fut(waiter);
 	fut.then([](future<long> fut){
+		assert(fut.ready());
 		auto f = fut.get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
 		print_tid("In then");
@@ -595,6 +612,8 @@ int main() {
 		fputs(fu.get().c_str(), stderr);
 	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
 		});
+
+		assert(fut.ready() == false);
 
 		future<void>([waiter]()mutable{waiter.set(fib(15)); });
 	return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
