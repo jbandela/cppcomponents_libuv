@@ -47,15 +47,6 @@ struct work_move<D,void>{
 
 std::atomic<int> work_count{0};
 
-struct default_loop_ref_unref{
-	uv_work_t* w_;
-	default_loop_ref_unref(uv_work_t& w):w_(&w){
-		uv_ref((uv_handle_t*) w_);
-	}	
-	~default_loop_ref_unref(){
-		uv_unref((uv_handle_t*) w_);
-	}
-};
 
 template<class T>
 struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
@@ -140,19 +131,20 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 	template<class TF>
 	auto then(bool use_default_loop,TF f)->std::shared_ptr<work<decltype(f(shared_self_))>>{
-		assert(shared_self_.get());
+		auto self_ = this->shared_from_this();;
 		if (then_added_){
 			throw std::runtime_error("Then called more than once");
 		}
 		then_added_ = true;
-		typedef decltype(f(shared_self_)) R;
-		auto self_ = shared_self_;
+		typedef decltype(f(self_)) R;
 		auto pw = std::make_shared<work<R>>([self_, f]()mutable{
-			return f(self_);
+			auto s = self_;
+			self_ = nullptr;
+			return f(s);
 
 		});
 		then_ = [pw, use_default_loop](){
-			if (false&&use_default_loop){
+			if (use_default_loop){
 				pw->start_on_default_loop();
 			}
 			else{
@@ -191,7 +183,10 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 	static void after_work_cb(uv_work_t* req, int status){
 		auto& w = *static_cast<work*>(req->data);
+
 		w.shared_self_ = nullptr;
+
+
 	}
 
 	// For then on main loop
@@ -234,7 +229,7 @@ class future:future_move<future<T>,T>{
 public:
 	future(std::shared_ptr < work < T >> p) : pw_(p){
 		
-		pw_->set_shared_self();
+		//pw_->set_shared_self();
 	}
 	template<class F>
 	future(F f) : pw_(std::make_shared<w_t>(f)){
@@ -307,26 +302,28 @@ int main() {
 	//	future<void>([waiter]()mutable{waiter.set(fib(15)); });
 	//	waiter = value_waiter<long>();
 	future<long> fut([](){return fib(15); });
-	fut.then(true,[](future<long> fut){
+	auto fut2 = fut.then(true,[](future<long> fut){
 		assert(fut.ready());
 		auto f = fut.get();
 		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
 
-	});
-	//.then([](future<void> fu){
-	//	return std::string("Hello World");})
-	//.then([](future<std::string> fu){
-	//	auto s = fu.get();
-	//	fputs(fu.get().c_str(), stderr);
-	//fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
-	//	});
-		//.then(true,[done](future<void> f)mutable{
-		//	f.get();
-		//	std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
-		//		<< "We are in thread " << uv_thread_self() << "\n";
+	})
 
-		//	//done.set();
-		//});
+	
+	.then([](future<void> fu){
+		return std::string("Hello World");})
+	.then([](future<std::string> fu){
+		auto s = fu.get();
+		fputs(fu.get().c_str(), stderr);
+	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
+		})
+		.then(true,[done](future<void> f)mutable{
+			f.get();
+			std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
+				<< "We are in thread " << uv_thread_self() << "\n";
+
+			done.set();
+		});
 
 		//assert(fut.ready() == false);
 
