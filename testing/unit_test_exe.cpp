@@ -242,6 +242,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 	}
 
 	void start(){
+		auto tid = uv_thread_self();
 		set_shared_self();
 		started_.store(true);
 		uv_async_init(uv_default_loop(),&async_,do_queue_start);
@@ -320,6 +321,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 
 	static void after_work_cb(uv_work_t* req, int status){
 		auto& w = *static_cast<work*>(req->data);
+		uv_close(reinterpret_cast<uv_handle_t*>(&w.async_),nullptr);
 		w.shared_self_ = nullptr;
 	}
 
@@ -609,19 +611,19 @@ int main() {
 	//	future<void>([waiter]()mutable{waiter.set(fib(15)); });
 	//	waiter = value_waiter<long>();
 	future<long> fut([](){return fib(15); });
-	//fut.then([](future<long> fut){
-	//	assert(fut.ready());
-	//	auto f = fut.get();
-	//	fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
+	fut.then([](future<long> fut){
+		assert(fut.ready());
+		auto f = fut.get();
+		fprintf(stderr, "%dth fibonacci is %lu\n", 15, f);
 
-	//})
-	//.then([](future<void> fu){
-	//	return std::string("Hello World");})
-	//.then([](future<std::string> fu){
-	//	auto s = fu.get();
-	//	fputs(fu.get().c_str(), stderr);
-	//fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
-	//	});
+	})
+	.then([](future<void> fu){
+		return std::string("Hello World");})
+	.then([](future<std::string> fu){
+		auto s = fu.get();
+		fputs(fu.get().c_str(), stderr);
+	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
+		});
 		//.then(true,[done](future<void> f)mutable{
 		//	f.get();
 		//	std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
