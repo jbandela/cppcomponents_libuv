@@ -248,7 +248,7 @@ struct work:std::enable_shared_from_this<work<T>>,work_move<work<T>,T>{
 		then_added_ = true;
 		typedef decltype(f(shared_self_)) R;
 		auto self_ = shared_self_;
-		auto pw = std::make_shared<work<R>>([self_, f](){
+		auto pw = std::make_shared<work<R>>([self_, f]()mutable{
 			return f(self_);
 
 		});
@@ -520,7 +520,7 @@ public:
 
 	template<class F>
 	auto then(bool run_on_default_loop, F f)->future < decltype(f(future(pw_))) > {
-		return pw_->then(run_on_default_loop, [f](std::shared_ptr<w_t> w){
+		return pw_->then(run_on_default_loop, [f](std::shared_ptr<w_t> w)mutable{
 			future fut(w);
 			return f(fut);
 		});
@@ -575,6 +575,7 @@ int main() {
 	std::cout << "main thread is thread " << uv_thread_self() << "\n";
 
 	value_waiter<long> waiter;
+	value_waiter<void> done;
 	future<long> fut(waiter);
 	fut.then([](future<long> fut){
 		assert(fut.ready());
@@ -589,9 +590,12 @@ int main() {
 		fputs(fu.get().c_str(), stderr);
 	fprintf(stderr,"\nHello world work count = %d\n", work_count.load());
 		})
-		.then(true,[](future<void>){
+		.then(false,[done](future<void> f)mutable{
+			f.get();
 			std::cout << "That's all" << " folks " << "(P.S. Notice how our cout did not get messed up)\n"
 				<< "We are in thread " << uv_thread_self() << "\n";
+
+			done.set();
 		});
 
 		assert(fut.ready() == false);
@@ -599,6 +603,8 @@ int main() {
 
 		std::cout << "Cout at the beginning\n";
 		future<void>([waiter]()mutable{waiter.set(fib(15)); });
-	return uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	auto ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
+	done.get();
+	return ret;
 
 }
