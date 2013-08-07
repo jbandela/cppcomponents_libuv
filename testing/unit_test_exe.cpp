@@ -218,7 +218,14 @@ struct future_move<D, void>{
 };
 
 
-
+template<class T>
+struct dummy_function{
+	T operator()(){ return T{}; }
+};
+template<>
+struct dummy_function<void>{
+	void operator()(){ return; }
+};
 
 template<class T>
 class future:future_move<future<T>,T>{
@@ -232,8 +239,11 @@ public:
 	future(F f) : pw_(std::make_shared<w_t>(f)){
 		pw_->start();
 	}
-	future(value_waiter<T> w) : pw_(std::make_shared<w_t>([w](){return w.get();})){
-			pw_->start();
+	future(value_waiter<T> w) : pw_(std::make_shared<w_t>([w](){return w.get(); })){
+		pw_->start();
+	}	
+	future() : pw_(std::make_shared<w_t>(dummy_function<T>{})){
+		pw_->start();
 	}
 
 
@@ -288,6 +298,9 @@ struct wc_printer{
 
 wc_printer pr_;
 
+
+#include "../cppcomponents_libuv/future_helper.hpp"
+
 int main() {
 
 
@@ -332,6 +345,15 @@ int main() {
 
 
 		std::cout << "Cout at the beginning\n";
+
+		auto fut3 = future<std::string>([](){return std::string("Hello Await"); });
+
+		auto fut4 = future_helper::do_async([fut3](future_helper::async_helper<void> helper){
+			auto s = helper.await(fut3);
+			fprintf(stderr, s.c_str());
+			fprintf(stderr, " in thread %d\n", uv_thread_self());
+			//return 0;
+		});
 	auto ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 	//done.get();
 	return ret;
