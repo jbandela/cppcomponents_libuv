@@ -89,7 +89,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\cppcomponents_libuv\cppcomponents_libuv.hpp" />
-    <ClInclude Include="..\..\..\cppcomponents_libuv\future_helper.hpp" />
     <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper.hpp" />
     <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper_imp.hpp" />
   </ItemGroup>

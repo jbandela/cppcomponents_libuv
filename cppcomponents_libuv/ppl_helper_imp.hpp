@@ -82,6 +82,16 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
 
         }
 
+		template<class W, class F>
+		static void waiter_set_helper(W& w, F& f){
+			w.set(f.get());
+		}
+		template<class W>
+		static void waiter_set_helper(W& w, future<void>& f){
+			f.get();
+			w.set();
+		}
+
         async_helper(detail::convertible_to_async_helper);
 
 
@@ -92,7 +102,8 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
             auto co = co_;
             func_type retfunc([co,t]()mutable{
                 auto sptr = co->shared_from_this();
-                return t.then([sptr](typename detail::task_type<R>::type et)->T{
+				value_waiter<T> waiter;
+                t.then(true,[sptr,waiter](typename detail::task_type<R>::type et)mutable{
                     detail::ret_type ret;
                     ret.eptr_ = nullptr;
                     ret.pv_ = nullptr;
@@ -100,9 +111,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
                     (*sptr->coroutine_)(&ret);
                     try{
                         func_type f(std::move(*static_cast<func_type*>(sptr->coroutine_->get())));
-						value_waiter<T> waiter;
-						f().then([waiter](future<T> f)mutable{waiter.set(f.get()); });
-						return waiter.get();
+						f().then(false, [waiter](future<T> f)mutable{waiter_set_helper(waiter, f); });
                     }
                     catch(std::exception&){
                         ret.eptr_ = std::current_exception();
@@ -111,6 +120,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
                         throw;
                     }
                 });
+				return future<T>(waiter);
             });
 
             (*co_->coroutine_caller_)(&retfunc);

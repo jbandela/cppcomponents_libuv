@@ -331,14 +331,15 @@ int main() {
 
 	auto fut3 = future<std::string>([](){return std::string("Hello Await"); });
 
-	auto fut4 = future_helper::do_async([fut,fut3](future_helper::async_helper<int> helper){
+	auto fut4 = future_helper::do_async([fut,fut3](future_helper::async_helper<void> helper){
 		fprintf(stderr, " do_async in thread %d\n", uv_thread_self());
 		auto f = helper.await(fut);
 		fprintf(stderr, "The 15th fibonacci is %d\n", f);
 		auto s = helper.await(fut3);
-		std::string s2 = s;//fprintf(stderr, s.c_str());
-		//fprintf(stderr, " in thread %d\n", uv_thread_self());
-		return 0;
+		std::string s2 = s;
+		fprintf(stderr, " do_async2 in thread %d\n", uv_thread_self());
+		fprintf(stderr, s.c_str());
+		//return 0;
 	});
 	auto ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
 	//done.get();
