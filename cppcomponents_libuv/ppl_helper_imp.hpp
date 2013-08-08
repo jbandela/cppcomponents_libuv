@@ -47,6 +47,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
             PPL_HELPER_ENTER_EXIT;
             typedef boost::coroutines::coroutine<void*(void*)> co_type;
             std::unique_ptr<co_type> coroutine_;
+			static_assert(std::is_same<co_type, co_type::caller_type>::value, "Coroutine and caller type not the same");
             co_type::caller_type* coroutine_caller_;
             coroutine_holder():coroutine_(),coroutine_caller_(nullptr){}
 
@@ -82,15 +83,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
 
         }
 
-		template<class W, class F>
-		static void waiter_set_helper(W& w, F& f){
-			w.set(f.get());
-		}
-		template<class W>
-		static void waiter_set_helper(W& w, future<void>& f){
-			f.get();
-			w.set();
-		}
+
 
         async_helper(detail::convertible_to_async_helper);
 
@@ -102,8 +95,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
             auto co = co_;
             func_type retfunc([co,t]()mutable{
                 auto sptr = co->shared_from_this();
-				value_waiter<T> waiter;
-                t.then(true,[sptr,waiter](typename detail::task_type<R>::type et)mutable{
+                return t.then(true,[sptr](typename detail::task_type<R>::type et)mutable{
                     detail::ret_type ret;
                     ret.eptr_ = nullptr;
                     ret.pv_ = nullptr;
@@ -111,7 +103,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
                     (*sptr->coroutine_)(&ret);
                     try{
                         func_type f(std::move(*static_cast<func_type*>(sptr->coroutine_->get())));
-						f().then(false, [waiter](future<T> f)mutable{waiter_set_helper(waiter, f); });
+						return f();
                     }
                     catch(std::exception&){
                         ret.eptr_ = std::current_exception();
@@ -119,8 +111,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
                         (*sptr->coroutine_)(&ret);
                         throw;
                     }
-                });
-				return future<T>(waiter);
+                }).unwrap();
             });
 
             (*co_->coroutine_caller_)(&retfunc);

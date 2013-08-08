@@ -239,8 +239,37 @@ struct dummy_function<void>{
 	void operator()(){ return; }
 };
 
+
+template<class F>
+struct unwrap_helper{
+
+}; 
+template<template<class> class future,class T>
+struct unwrap_helper < future < future<T >> >{
+	future<T> unwrap(){
+		value_waiter<T> waiter;
+		static_cast < future < future<T >> *>(this)->then(false, [waiter](future < future < T >> f)mutable{waiter.set(f.get()); });
+		return  future<T>(waiter);
+
+	}
+
+}; 
+template<template<class> class future>
+struct unwrap_helper < future < future<void >> >{
+	future<void> unwrap(){
+		value_waiter<void> waiter;
+		static_cast < future < future<void >> *>(this)->then(false, [waiter](future < future < void >> f)mutable{f.get(); waiter.set(); });
+		return  future<void>(waiter);
+
+	}
+
+};
+
 template<class T>
-class future : future_move<future<T>, T>{
+class future : future_move<future<T>, T>, public unwrap_helper<future<T>>{
+
+	typedef T result_type;
+
 	typedef work<T> w_t;
 	std::shared_ptr<w_t> pw_;
 
@@ -278,7 +307,6 @@ public:
 	bool ready()const{
 		return pw_->ready();
 	}
-
 
 };
 
@@ -335,14 +363,23 @@ int main() {
 		fprintf(stderr, " do_async in thread %d\n", uv_thread_self());
 		auto f = helper.await(fut);
 		fprintf(stderr, "The 15th fibonacci is %d\n", f);
-		auto s = helper.await(fut3);
+		auto s = helper.await(fut3) + "\n\n";
 		std::string s2 = s;
 		fprintf(stderr, " do_async2 in thread %d\n", uv_thread_self());
 		fprintf(stderr, s.c_str());
-		//return 0;
+
+		future <std::string> in_async_future([](){
+			fprintf(stderr, " in_async_future in thread %d\n", uv_thread_self());
+		return std::string("Goodbye from do_async\n"); });
+
+		s = helper.await(in_async_future);
+		fprintf(stderr, " do_async3 in thread %d\n", uv_thread_self());
+		fprintf(stderr, s.c_str());
+
+
+
 	});
 	auto ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-	//done.get();
 	return ret;
 
 }
