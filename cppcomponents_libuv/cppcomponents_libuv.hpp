@@ -230,7 +230,7 @@ struct value_waiter_helper {
 
 	storage_and_error<T> storage_;
 
-	T get(){
+	T get()const{
 		lock lk(mu_);
 		cond_var_.wait(lk, [this](){return storage_.finished(); });
 		return storage_.get();

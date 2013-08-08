@@ -3,12 +3,12 @@
 #pragma comment(lib, "Psapi.lib")
 #include <uv.h>
 
-#define PPL_HELPER_OUTPUT_ENTER_EXIT
 
 #ifdef _MSC_VER
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
 #include <crtdbg.h>
+#include <iostream>
 
 namespace{
 	struct MemLeakCheckInit{
@@ -90,8 +90,7 @@ struct work : std::enable_shared_from_this<work<T>>, work_move<work<T>, T>{
 		uv_async_init(uv_default_loop(), &async_start_on_default_loop_, do_queue_start_on_default);
 		async_start_.data = this;
 		async_start_on_default_loop_.data = this;
-
-		fprintf(stderr, "Work constructor %d\n", work_count.fetch_add(1) + 1);
+		work_count.fetch_add(1);
 	}
 
 	void set_shared_self(){
@@ -212,7 +211,7 @@ struct work : std::enable_shared_from_this<work<T>>, work_move<work<T>, T>{
 
 
 	~work(){
-		fprintf(stderr, "Work destructor %d\n", work_count.fetch_sub(1));
+		work_count.fetch_sub(1);
 	}
 };
 
@@ -375,6 +374,19 @@ int main() {
 		s = helper.await(in_async_future);
 		fprintf(stderr, " do_async3 in thread %d\n", uv_thread_self());
 		fprintf(stderr, s.c_str());
+		future<std::string> input_future([](){
+			std::cout << "Enter a name\n";
+			std::string name;
+			std::cin >> name;
+			return name;
+		});
+
+		auto name = helper.await(input_future);
+
+		future<void> output_future([&name](){
+			std::cout << "Hello " << name << "\n";
+		});
+		helper.await(output_future);
 
 
 

@@ -7,7 +7,7 @@
 #ifndef ASYNC_HELPER_PPL_HELPER_IMP_INCLUDED_04_24_2013
 #define ASYNC_HELPER_PPL_HELPER_IMP_INCLUDED_04_24_2013
 
-#include <boost/coroutine/all.hpp>
+#include "../../cppcomponents_async_coroutine_wrapper/cppcomponents_async_coroutine_wrapper/cppcomponents_async_coroutine_wrapper.hpp"
 #include <memory>
 #include <exception>
 #include <utility>
@@ -45,10 +45,9 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
 
         struct coroutine_holder:std::enable_shared_from_this<coroutine_holder>{
             PPL_HELPER_ENTER_EXIT;
-            typedef boost::coroutines::coroutine<void*(void*)> co_type;
+            typedef cppcomponents_async_coroutine_wrapper::CoroutineVoidPtr co_type;
             std::unique_ptr<co_type> coroutine_;
-			static_assert(std::is_same<co_type, co_type::caller_type>::value, "Coroutine and caller type not the same");
-            co_type::caller_type* coroutine_caller_;
+            co_type::CallerType* coroutine_caller_;
             coroutine_holder():coroutine_(),coroutine_caller_(nullptr){}
 
         };
@@ -102,7 +101,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
                     ret.pv_ = &et;
                     (*sptr->coroutine_)(&ret);
                     try{
-                        func_type f(std::move(*static_cast<func_type*>(sptr->coroutine_->get())));
+                        func_type f(std::move(*static_cast<func_type*>(sptr->coroutine_->Get())));
 						return f();
                     }
                     catch(std::exception&){
@@ -115,7 +114,7 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
             });
 
             (*co_->coroutine_caller_)(&retfunc);
-            return static_cast<detail::ret_type*>(co_->coroutine_caller_->get())->get<typename detail::task_type<R>::type>().get();
+            return static_cast<detail::ret_type*>(co_->coroutine_caller_->Get())->get<typename detail::task_type<R>::type>().get();
         }
 
     };
@@ -147,10 +146,10 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
             typedef std::function<task_t()> func_type;
 
 
-            static void coroutine_function(coroutine_holder::co_type::caller_type& ca){
+            static void coroutine_function(cppcomponents::use<cppcomponents_async_coroutine_wrapper::ICoroutineVoidPtr> ca){
                 PPL_HELPER_ENTER_EXIT;;
 
-                auto p = ca.get();
+                auto p = ca.Get();
                 auto pthis = reinterpret_cast<simple_async_function_holder*>(p);
                 pthis->coroutine_caller_ = &ca;
                 try{
@@ -176,8 +175,8 @@ namespace CPP_ASYNC_AWAIT_PPL_NAMESPACE{
             simple_async_function_holder(F f):f_(f){}
 
             typename detail::task_type<return_type>::type run(){
-                coroutine_.reset(new coroutine_holder::co_type(&coroutine_function,this));
-                func_type f(std::move(*static_cast<func_type*>(coroutine_->get())));
+                coroutine_.reset(new coroutine_holder::co_type(cppcomponents::make_delegate<cppcomponents_async_coroutine_wrapper::CoroutineHandler>(coroutine_function),this));
+                func_type f(std::move(*static_cast<func_type*>(coroutine_->Get())));
                 return f();
 
             }
