@@ -96,7 +96,7 @@ namespace future_helper{
 			auto co = co_;
 			func_type retfunc([co, t,main_loop]()mutable{
 				auto sptr = co->shared_from_this();
-				return t.then(main_loop,[sptr](future<R> et)->T{
+				return t.then(main_loop,[sptr](future<R> et)->future<T>{
 					detail::ret_type ret;
 					ret.eptr_ = nullptr;
 					ret.pv_ = nullptr;
@@ -104,7 +104,7 @@ namespace future_helper{
 					(*sptr->coroutine_)(&ret);
 					try{
 						func_type f(std::move(*static_cast<func_type*>(sptr->coroutine_->get())));
-						return f().get();
+						return f();
 					}
 					catch (std::exception&){
 						ret.eptr_ = std::current_exception();
@@ -166,10 +166,8 @@ namespace future_helper{
 				catch (std::exception&){
 					auto eptr = std::current_exception();
 					func_type retfunc([eptr](){
-						value_waiter<ret_type> w;
-						future_t ret;
 						std::rethrow_exception(eptr);
-						return ret;
+						return future_t{};
 					});
 					ca(&retfunc);
 				}

@@ -26,5 +26,11 @@
     <ClInclude Include="..\..\..\cppcomponents_libuv\future_helper.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper_imp.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
