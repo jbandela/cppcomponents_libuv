@@ -154,13 +154,17 @@ namespace cppcomponents_libuv{
 
 
  }
-
 namespace cppcomponents_libuv{
 
 	using cppcomponents::use;
 	using cppcomponents::define_interface;
 	using cppcomponents::cr_string;
-	
+	using cppcomponents::object_interfaces;
+	using cppcomponents::factory_interface;
+	using cppcomponents::static_interfaces;
+	using cppcomponents::runtime_class;
+	using cppcomponents::use_runtime_class;
+	using cppcomponents::implement_runtime_class;
 
 	// All the Interfaces declared
 
@@ -506,6 +510,10 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(ITcpStreamFactory, TcpInit);
 	};
+	inline std::string TcpStreamId(){return "cppcomponents_lib_uv_dll!TcpStream";}
+	typedef runtime_class<TcpStreamId, object_interfaces<ITcpStream>, factory_interface<ITcpStreamFactory>> TcpStream_t;
+	typedef use_runtime_class<TcpStream_t> TcpStream;
+	
 
 	struct IUdpStream
 		: public cppcomponents::define_interface < cppcomponents::uuid <
@@ -542,6 +550,9 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IUdpStreamFactory, UdpInit);
 	};
+	inline std::string UdpStreamId(){ return "cppcomponents_lib_uv_dll!UdpStream"; }
+	typedef runtime_class<UdpStreamId, object_interfaces<IUdpStream>, factory_interface<IUdpStreamFactory>> UdpStream_t;
+	typedef use_runtime_class<UdpStream_t> UdpStream;
 
 
 	struct ITty
@@ -567,6 +578,11 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(ITtyFactory, Init);
 	};
+
+	inline std::string TtyId(){ return "cppcomponents_lib_uv_dll!Tty"; }
+	typedef runtime_class<TtyId, object_interfaces<ITty>, factory_interface<ITtyFactory>> Tty_t;
+	typedef use_runtime_class<Tty_t> Tty;
+
 	struct IPipe
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0xce484587 , 0x7aa3 , 0x477c , 0x9ad8 , 0xd86ca293babf>,
@@ -591,6 +607,9 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IPipeFactory, Init);
 	};
+	inline std::string PipeId(){ return "cppcomponents_lib_uv_dll!Pipe"; }
+	typedef runtime_class<PipeId, object_interfaces<IPipe>, factory_interface<IPipeFactory>> Pipe_t;
+	typedef use_runtime_class<Pipe_t> Pipe;
 
 
 
@@ -618,6 +637,10 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IPollFactory, Init,InitSocket);
 	};
 
+	inline std::string PollId(){ return "cppcomponents_lib_uv_dll!Poll"; }
+	typedef runtime_class<PollId, object_interfaces<IPoll>, factory_interface<IPollFactory>> Poll_t;
+	typedef use_runtime_class<Poll_t> Poll;
+
 	struct IPrepare
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0xc15bdb50 , 0x4fc6 , 0x4224 , 0x984d , 0x4a9e57f3d7ee		>,
@@ -630,6 +653,11 @@ namespace cppcomponents_libuv{
 	};
 
 	// DefaultFactory works for IPrepare Init
+
+	inline std::string PrepareId(){ return "cppcomponents_lib_uv_dll!Prepare"; }
+	typedef runtime_class<PrepareId, object_interfaces<IPrepare>> Prepare_t;
+	typedef use_runtime_class<Prepare_t> Prepare;
+
 	
 	struct ICheck
 		: public cppcomponents::define_interface <
@@ -641,6 +669,12 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(ICheck, Start, Stop);
 	};
+
+	inline std::string CheckId(){ return "cppcomponents_lib_uv_dll!Check"; }
+	typedef runtime_class<CheckId, object_interfaces<ICheck>> Check_t;
+	typedef use_runtime_class<Check_t> Check;
+
+
 	struct IIdle
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0xdc2333a3 , 0xa2c8 , 0x47c4 , 0xbfde , 0xee062553c8df>,
@@ -651,6 +685,10 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IIdle, Start, Stop);
 	};	
+
+	inline std::string IdleId(){ return "cppcomponents_lib_uv_dll!Idle"; }
+	typedef runtime_class<IdleId, object_interfaces<IIdle>> Idle_t;
+	typedef use_runtime_class<Idle_t> Idle;
 
 	struct IAsync
 		: public cppcomponents::define_interface <
@@ -672,6 +710,9 @@ namespace cppcomponents_libuv{
 
 	// Note Async is the only Handle class that does not call Close in its destructor
 	// This is because Async can be used on other threads and Close in another thread is unsafe
+	inline std::string AsyncId(){ return "cppcomponents_lib_uv_dll!Async"; }
+	typedef runtime_class<AsyncId, object_interfaces<IAsync>, factory_interface<IAsyncFactory>> Async_t;
+	typedef use_runtime_class<Async_t> Async;
 
 
 	struct ITimer
@@ -693,15 +734,18 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid <0x52b4032d , 0x2898 , 0x4a5d , 0x944c , 0x9826fa0dddeb		> >
 	{
-		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>, cppcomponents::use<AsyncCallback>);
+		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>, cppcomponents::use<TimerCallback>);
 
-		CPPCOMPONENTS_CONSTRUCT(IAsyncFactory, Init);
+		CPPCOMPONENTS_CONSTRUCT(ITimerFactory, Init);
 	};
+	inline std::string TimerId(){ return "cppcomponents_lib_uv_dll!Timer"; }
+	typedef runtime_class<TimerId, object_interfaces<ITimer>, factory_interface<ITimerFactory>> Timer_t;
+	typedef use_runtime_class<Timer_t> Timer;
 
 
 
 
-	struct ICpuInfo 
+	struct ICpuInfo
 		: public cppcomponents::define_interface < cppcomponents::uuid < 0x747f0089 , 0xea00 , 0x4821 , 0xa75c , 0xd64760ef98cc	>>
 	{
 		cppcomponents::cr_string GetModel();
@@ -816,6 +860,10 @@ namespace cppcomponents_libuv{
 
 
 	};
+	inline std::string StdioContainerId(){ return "cppcomponents_lib_uv_dll!StdioContainer"; }
+	typedef runtime_class<StdioContainerId, object_interfaces<IStdioContainer>> StdioContainer_t;
+	typedef use_runtime_class<StdioContainer_t> StdioContainer;
+
 
 	struct IProcessOptions
 		: public cppcomponents::define_interface < cppcomponents::uuid < 0x18b90130 , 0x2ea2 , 0x4c21 , 0x934b , 0xf79cf31c7242	>>
@@ -853,6 +901,9 @@ namespace cppcomponents_libuv{
 			SetGid, GetGid);
 
 	};
+	inline std::string ProcessOptionsId(){ return "cppcomponents_lib_uv_dll!ProcessOptions"; }
+	typedef runtime_class<ProcessOptionsId, object_interfaces<IProcessOptions>> ProcessOptions_t;
+	typedef use_runtime_class<ProcessOptions_t> ProcessOptions;
 
 	struct IProcess 
 		:public cppcomponents::define_interface < 
@@ -879,6 +930,14 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IProcessStatics, Kill);
 	};
+
+	inline std::string ProcessId(){ return "cppcomponents_lib_uv_dll!Process"; }
+	typedef runtime_class<ProcessId, object_interfaces<IProcess>, factory_interface<IProcessFactory>,static_interfaces<IProcessStatics>> Process_t;
+	typedef use_runtime_class<Process_t> Process;
+
+
+
+
 
 
 
@@ -947,6 +1006,11 @@ namespace cppcomponents_libuv{
 
 	};
 
+	inline std::string FsRawId(){ return "cppcomponents_lib_uv_dll!FsRaw"; }
+	typedef runtime_class<FsRawId, static_interfaces<IFsRawStatics>> FsRaw_t;
+	typedef use_runtime_class<FsRaw_t> FsRaw;
+
+
 	struct IFsPoll
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xff330521, 0x0c3e, 0x4c7b, 0x85fd, 0x7cfef3e71cb4 >>
@@ -964,6 +1028,13 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IFsPollFactory, Init);
 	};
+
+	inline std::string FsPollId(){ return "cppcomponents_lib_uv_dll!FsPoll"; }
+	typedef runtime_class<FsPollId, object_interfaces<IFsPoll>, factory_interface<IFsPollFactory>> FsPoll_t;
+	typedef use_runtime_class<FsPoll_t> FsPoll;
+
+
+
 	struct ISignal
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xce633c27, 0xa8cb, 0x4752, 0xa7b9, 0x119924d606f0 >>
@@ -982,6 +1053,11 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(ISignalFactory, Init);
 	}; 
 
+	inline std::string SignalId(){ return "cppcomponents_lib_uv_dll!Signal"; }
+	typedef runtime_class<SignalId, object_interfaces<ISignal>, factory_interface<ISignalFactory>> Signal_t;
+	typedef use_runtime_class<Signal_t> Signal;
+
+
 	struct IFsEvent
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0xcd45427c, 0xed02, 0x408a, 0x83ae, 0xa2848df6b027>
@@ -999,6 +1075,9 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IFsEventFactory, Init);
 	}; 
+	inline std::string FsEventId(){ return "cppcomponents_lib_uv_dll!FsEvent"; }
+	typedef runtime_class<FsEventId, object_interfaces<IFsEvent>, factory_interface<IFsEventFactory>> FsEvent_t;
+	typedef use_runtime_class<FsEvent_t> FsEvent;
 
 	struct IMutex
 		: cppcomponents::define_interface <
@@ -1021,6 +1100,11 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IMutexFactory, Init);
 	};
+
+	inline std::string MutexId(){ return "cppcomponents_lib_uv_dll!Mutex"; }
+	typedef runtime_class<MutexId, object_interfaces<IMutex>, factory_interface<IMutexFactory>> Mutex_t;
+	typedef use_runtime_class<Mutex_t> Mutex;
+
 
 	struct IRwlock
 		: cppcomponents::define_interface <
@@ -1046,6 +1130,10 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IRwlockFactory, Init);
 	};
+	inline std::string RwlockId(){ return "cppcomponents_lib_uv_dll!Rwlock"; }
+	typedef runtime_class<RwlockId, object_interfaces<IRwlock>, factory_interface<IRwlockFactory>> Rwlock_t;
+	typedef use_runtime_class<Rwlock_t> Rwlock;
+
 
 	struct ISemaphore
 		: cppcomponents::define_interface <
@@ -1067,6 +1155,9 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(ISemaphoreFactory, Init);
 	};
+	inline std::string SemaphoreId(){ return "cppcomponents_lib_uv_dll!Semaphore"; }
+	typedef runtime_class<SemaphoreId, object_interfaces<ISemaphore>, factory_interface<ISemaphoreFactory>> Semaphore_t;
+	typedef use_runtime_class<Semaphore_t> Semaphore;
 
 	struct IConditionVariable
 		: cppcomponents::define_interface <
@@ -1090,6 +1181,9 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IConditionVariableFactory, Init);
 	};
+	inline std::string ConditionVariableId(){ return "cppcomponents_lib_uv_dll!ConditionVariable"; }
+	typedef runtime_class<ConditionVariableId, object_interfaces<IConditionVariable>, factory_interface<IConditionVariableFactory>> ConditionVariable_t;
+	typedef use_runtime_class<ConditionVariable_t> ConditionVariable;
 
 
 	struct IBarrier
@@ -1107,6 +1201,11 @@ namespace cppcomponents_libuv{
 	{
 		use<cppcomponents::InterfaceUnknown> Init(unsigned int count);
 	};
+
+	inline std::string BarrierId(){ return "cppcomponents_lib_uv_dll!Barrier"; }
+	typedef runtime_class<BarrierId, object_interfaces<IBarrier>, factory_interface<IBarrierFactory>> Barrier_t;
+	typedef use_runtime_class<Barrier_t> Barrier;
+
 
 
 	// uv_once is not implemented use std::once;
