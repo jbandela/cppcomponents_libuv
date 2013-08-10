@@ -156,7 +156,7 @@ namespace cppcomponents_libuv{
 	struct IShutdownRequest;
 	struct IWriteRequest;
 	struct IConnectRequest;
-	struct ISendRequest;
+	struct IUdpSendRequest;
 	struct IFsRequest;
 	struct IWorkRequest;
 
@@ -263,6 +263,9 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
 	> GetaddrinfoCallback;
 
+	typedef cppcomponents::delegate < void(use<IUdpSendRequest>, int status),
+		cppcomponents::uuid<0x719a0a9f, 0x6834, 0x47c5, 0xb659, 0x1fff4784bee7>
+	> UdpSendCallback;
 
 
 
@@ -313,16 +316,15 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IConnectRequest, GetHandle);
 	};
-	struct ISendRequest
+	struct IUdpSendRequest
 		: public cppcomponents::define_interface < cppcomponents::uuid<0xc838dab9, 0x8815, 0x4592, 0x84f4, 0x3574ea72db0d>,
 		IRequest>
 	{
 		cppcomponents::use<IStream> GetHandle();
 
-		CPPCOMPONENTS_CONSTRUCT(ISendRequest, GetHandle);
+		CPPCOMPONENTS_CONSTRUCT(IUdpSendRequest, GetHandle);
 	};
 
-	struct ILoop;
 
 	struct IGetAddrinfoRequest 
 		: public cppcomponents::define_interface < cppcomponents::uuid<0x9c3fbcb4, 0xa35e, 0x4486, 0x9377, 0xedb1262e5f6e>,
@@ -346,6 +348,7 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface < cppcomponents::uuid<0x50d9617d, 0xf3e2, 0x4c2a, 0x909f, 0x65c810fa3340>,
 		IRequest>
 	{
+		void Cleanup();
 		cppcomponents::use<ILoop> GetLoop();
 		std::ptrdiff_t GetResult();
 		void* GetPtr();
@@ -353,7 +356,7 @@ namespace cppcomponents_libuv{
 		Stat GetStatBuf();
 
 
-		CPPCOMPONENTS_CONSTRUCT(IFsRequest, GetLoop,GetResult,GetPtr,GetPath,GetStatBuf);
+		CPPCOMPONENTS_CONSTRUCT(IFsRequest,Cleanup, GetLoop,GetResult,GetPtr,GetPath,GetStatBuf);
 	};
 
 	struct IUdpSendRequest
@@ -374,7 +377,7 @@ namespace cppcomponents_libuv{
 	{
 		int HandleType();
 		bool IsActive();
-		void Close(cppcomponents::use<VoidCallback>);
+		void Close(cppcomponents::use<CloseCallback>);
 		void* UvHandle();
 
 		CPPCOMPONENTS_CONSTRUCT(IHandle, IsActive,HandleType,Close,UvHandle);
@@ -406,9 +409,9 @@ namespace cppcomponents_libuv{
 
 		void* UvHandle();
 
-		void Walk(cppcomponents::use<WalkCallback>);
+		void Walk(cppcomponents::use<WalkCallback>,void* arg);
 
-		void QueueWork(cppcomponents::use<WorkCallback>,cppcomponents::use<AfterWorkCallback>);
+		use<IWorkRequest> QueueWork(cppcomponents::use<WorkCallback>, cppcomponents::use<AfterWorkCallback>);
 
 
 		CPPCOMPONENTS_CONSTRUCT(ILoop, RunDefault, RunOnce, RunNoWait,
@@ -437,9 +440,9 @@ namespace cppcomponents_libuv{
 		0x9b7c72d8 , 0xb955 , 0x4163 , 0x9e1f , 0x0c905b60c58f
 		>,IHandle>
 	{
-		void Shutdown(cppcomponents::use<CallbackWithStatus>);
+		use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback>);
 		void Listen(int backlog, cppcomponents::use<ConnectionCallback>);
-		void Accept(cppcomponents::use<IStream> client);
+		use<IStream> Accept();
 
 		void ReadStart(cppcomponents::use<AllocCallback>,cppcomponents::use<ReadCallback>);
 		void ReadStop();
@@ -459,8 +462,6 @@ namespace cppcomponents_libuv{
 
 	};
 
-	typedef CallbackWithStatus ConnectCallback;
-
 
 	struct ITcpStream
 		: public cppcomponents::define_interface < cppcomponents::uuid <
@@ -475,8 +476,8 @@ namespace cppcomponents_libuv{
 		void Bind6(sockaddr_in6);
 		void GetSockName(sockaddr* name, int* namelen);
 		void GetPeerName(sockaddr* name, int namelen);
-		void Connect(sockaddr_in address, cppcomponents::use<ConnectCallback>);
-		void Connect6(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
+		use<IConnectRequest> Connect(sockaddr_in address, cppcomponents::use<ConnectCallback>);
+		use<IConnectRequest> Connect6(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
 
 		CPPCOMPONENTS_CONSTRUCT(ITcpStream, Open,NoDelay,KeepAlive,SimultaneousAccepts,
 			Bind,Bind6,GetSockName,GetPeerName,Connect,Connect6);
@@ -492,10 +493,6 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(ITcpStreamFactory, TcpInit);
 	};
 
-	typedef CallbackWithStatus SendCallback;
-	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf,
-		sockaddr* addr, unsigned flags),
-		cppcomponents::uuid<0xe1211edc , 0x697c , 0x438e,0x9b88 , 0xb1bdcf56b453> > RecvCallback;
 	struct IUdpStream
 		: public cppcomponents::define_interface < cppcomponents::uuid <
 		0x2c4a1e5e , 0x4362 , 0x45db , 0xb8d6 , 0xac71c6810066
@@ -511,10 +508,10 @@ namespace cppcomponents_libuv{
 		void SetMulticastTtl(std::int32_t ttl);
 		void SetBroadcast(bool on);
 		void SetTtl(std::int32_t ttl);
-		void Send(Buffer* bufs, int buffcnt, sockaddr_in addr,
-			cppcomponents::use<SendCallback> send_cb);
-		void Send6(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
-			cppcomponents::use<SendCallback> send_cb);
+		use<IUdpSendRequest> Send(Buffer* bufs, int buffcnt, sockaddr_in addr,
+			cppcomponents::use<UdpSendCallback> send_cb);
+		use<IUdpSendRequest> Send6(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
+			cppcomponents::use<UdpSendCallback> send_cb);
 
 		void RecvStart(cppcomponents::use<AllocCallback>, cppcomponents::use<RecvCallback>);
 		void RecvStop();
@@ -563,7 +560,7 @@ namespace cppcomponents_libuv{
 	{
 		void Open(FileOsType file);
 		void Bind(cppcomponents::cr_string name);
-		void Connect(cppcomponents::cr_string name, cppcomponents::use<ConnectCallback> cb);
+		use<IConnectRequest> Connect(cppcomponents::cr_string name, cppcomponents::use<ConnectCallback> cb);
 		void PendingInstances(int count);
 
 		CPPCOMPONENTS_CONSTRUCT(IPipe, Open, Bind, Connect, PendingInstances);
@@ -607,7 +604,6 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IPollFactory, Init,InitSocket);
 	};
 
-	typedef CallbackWithStatus PrepareCallback;
 	struct IPrepare
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0xc15bdb50 , 0x4fc6 , 0x4224 , 0x984d , 0x4a9e57f3d7ee		>,
@@ -621,7 +617,6 @@ namespace cppcomponents_libuv{
 
 	// DefaultFactory works for IPrepare Init
 	
-	typedef CallbackWithStatus CheckCallback;
 	struct ICheck
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0x313b4d56 , 0x1def , 0x431d , 0x84fb , 0x48556b725e20		>,
@@ -632,7 +627,6 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(ICheck, Start, Stop);
 	};
-	typedef CallbackWithStatus IdleCallback;
 	struct IIdle
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0xdc2333a3 , 0xa2c8 , 0x47c4 , 0xbfde , 0xee062553c8df>,
@@ -852,7 +846,20 @@ namespace cppcomponents_libuv{
 	};
 
 
-	// uv_cancel is not Implemented
+
+
+	struct IFsStatics
+		: public cppcomponent::define_interface <
+		cppcomponents::uuid<0x96340307, 0x442f, 0x4327, 0x8fd0, 0xcbb71d95bf8a>
+		>
+	{
+		use<IFsRequest> Close(use<ILoop>, FileOsType, use<FsCallback>);
+		use<IFsRequest> Open(use<ILoop>, cppcomponents::cr_string, int flags,
+			int mode, use<FsCallback>);
+
+
+
+	};
 
 
 
