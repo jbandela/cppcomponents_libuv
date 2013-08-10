@@ -33,7 +33,8 @@ namespace cppcomponents_libuv{
 }
 #else
 #define NOMINMAX
-#include <winsock.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
 
 
 /**
@@ -57,6 +58,36 @@ namespace cppcomponents_libuv{
 }
 #endif
 struct addrinfo;
+
+namespace cppcomponents_libuv{
+	// Copied from uv.h
+	typedef struct {
+		long tv_sec;
+		long tv_nsec;
+	} TimeSpec;
+
+
+	typedef struct {
+		uint64_t st_dev;
+		uint64_t st_mode;
+		uint64_t st_nlink;
+		uint64_t st_uid;
+		uint64_t st_gid;
+		uint64_t st_rdev;
+		uint64_t st_ino;
+		uint64_t st_size;
+		uint64_t st_blksize;
+		uint64_t st_blocks;
+		uint64_t st_flags;
+		uint64_t st_gen;
+		TimeSpec st_atim;
+		TimeSpec st_mtim;
+		TimeSpec st_ctim;
+		TimeSpec st_birthtim;
+	} Stat;
+
+
+}
 
  namespace cross_compiler_interface{
 
@@ -112,8 +143,8 @@ struct addrinfo;
 	 struct cross_conversion<cppcomponents_libuv::TimeSpec*>
 		 :public trivial_conversion<cppcomponents_libuv::TimeSpec*>{};
 	 template<>
-	 struct cross_conversion<cppcomponents_libuv::TimeSpec>
-		 :public trivial_conversion<cppcomponents_libuv::TimeSpec>{};
+	 struct cross_conversion<const cppcomponents_libuv::TimeSpec*>
+		 :public trivial_conversion<const cppcomponents_libuv::TimeSpec*>{};
 	 template<>
 	 struct cross_conversion<cppcomponents_libuv::Stat*>
 		 :public trivial_conversion<cppcomponents_libuv::Stat*>{};
@@ -125,31 +156,6 @@ struct addrinfo;
  }
 
 namespace cppcomponents_libuv{
-	// Copied from uv.h
-	typedef struct {
-		long tv_sec;
-		long tv_nsec;
-	} TimeSpec;
-
-
-	typedef struct {
-		uint64_t st_dev;
-		uint64_t st_mode;
-		uint64_t st_nlink;
-		uint64_t st_uid;
-		uint64_t st_gid;
-		uint64_t st_rdev;
-		uint64_t st_ino;
-		uint64_t st_size;
-		uint64_t st_blksize;
-		uint64_t st_blocks;
-		uint64_t st_flags;
-		uint64_t st_gen;
-		TimeSpec st_atim;
-		TimeSpec st_mtim;
-		TimeSpec st_ctim;
-		TimeSpec st_birthtim;
-	} Stat;
 
 	using cppcomponents::use;
 	using cppcomponents::define_interface;
@@ -166,6 +172,7 @@ namespace cppcomponents_libuv{
 	struct IWriteRequest;
 	struct IConnectRequest;
 	struct IUdpSendRequest;
+	struct IUdpRecvRequest;
 	struct IFsRequest;
 	struct IWorkRequest;
 
@@ -284,11 +291,19 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xb64e98a1, 0xc2a9, 0x4e5f, 0x9bd9, 0x93d0b2913f97>
 	> FsPollCallback;
 
+	typedef cppcomponents::delegate < void(use<IUdpSendRequest>, int status),
+		cppcomponents::uuid<0x5f2d1356, 0x7025, 0x4459, 0xb843, 0x9610a57f79be>
+	> UdpSendCallback;
+
+	typedef cppcomponents::delegate < void (use<IUdp>, std::ptrdiff_t nread,
+		Buffer buf, sockaddr* addr, unsigned int flags),
+		cppcomponents::uuid<0x62a0f712, 0x99f5, 0x4a09, 0x9d00, 0x2ec1b2dd6cea>
+	> UdpRecvCallback;
 
 
-
-
-
+	typedef cppcomponents::delegate < void(use<ISignal>, int signum),
+		cppcomponents::uuid<0x320b624c, 0xa2c7, 0x4039, 0xb66e, 0xc7dd27b28a1c>
+	> SignalCallback;
 
 	struct IRequest
 		: public cppcomponents::define_interface < cppcomponents::uuid < 0xd6d00c3e , 0x5a30 , 0x48c9 , 0x9f48 , 0x9f535bdc4af6	>>
@@ -318,7 +333,7 @@ namespace cppcomponents_libuv{
 		cppcomponents::use<IStream> GetHandle();
 		cppcomponents::use<IStream> GetSendHandle();
 
-		CPPCOMPONENTS_CONSTRUCT(IShutDownRequest, GetHandle,GetSendHandle);
+		CPPCOMPONENTS_CONSTRUCT(IWriteRequest, GetHandle, GetSendHandle);
 	};
 
 	struct IConnectRequest
@@ -372,14 +387,6 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IFsRequest,Cleanup, GetLoop,GetResult,GetPtr,GetPath,GetStatBuf);
 	};
 
-	struct IUdpSendRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0x002d6f99, 0xc330, 0x43f2, 0xa7d0, 0x9e9a9c85f50d>,
-		IRequest>
-	{
-		cppcomponents::use<IStream> GetHandle();
-
-		CPPCOMPONENTS_CONSTRUCT(IUdpSendRequest, GetHandle);
-	};
 
 
 
@@ -395,12 +402,6 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IHandle, IsActive,HandleType,Close,UvHandle);
 	};
-	typedef cppcomponents::delegate < void(cppcomponents::use<IHandle>),
-		cppcomponents::uuid < 0x6e965f49, 0xc378, 0x4549, 0xa332, 0x9e4d46fd4041
-		>> WalkCallback;
-
-
-
 
 
 	struct ILoop
@@ -526,7 +527,7 @@ namespace cppcomponents_libuv{
 		use<IUdpSendRequest> Send6(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
 			cppcomponents::use<UdpSendCallback> send_cb);
 
-		void RecvStart(cppcomponents::use<AllocCallback>, cppcomponents::use<RecvCallback>);
+		void RecvStart(cppcomponents::use<AllocCallback>, cppcomponents::use<UdpRecvCallback>);
 		void RecvStop();
 
 		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,Bind,Bind6,GetSockName,SetMembership);
@@ -660,9 +661,6 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IAsync,Send);
 	};
-	typedef cppcomponents::delegate<void(cppcomponents::use<IAsync>,int status),
-		cppcomponents::uuid < 0x0971b76f , 0xced9 , 0x455c , 0xaf5f , 0x9cf128d5f04e>> AsyncCallback;
-
 	struct IAsyncFactory
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid <0x2d5db39d , 0x52df , 0x4900 , 0xa60f , 0x48c3fcc8b154	> >
@@ -802,9 +800,6 @@ namespace cppcomponents_libuv{
 	typedef cppcomponents::runtime_class<UvId, cppcomponents::static_interfaces<IUvStatics>> Uv_t;
 	typedef cppcomponents::use_runtime_class<Uv_t> Uv;
 
-	typedef cppcomponents::delegate < void(int exit_status, int term_signal),
-		cppcomponents::uuid<0xa8b1fddf , 0x1501 , 0x4711 , 0x8ef1 , 0x9ae7ebe300a9	> > ExitCallback;
-
 	struct IStdioContainer
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0x6afae11e, 0x9c4c, 0x449a, 0xab0f, 0xfa14f085464f> >
@@ -889,7 +884,7 @@ namespace cppcomponents_libuv{
 
 
 	struct IFsRawStatics
-		: public cppcomponent::define_interface <
+		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0x96340307, 0x442f, 0x4327, 0x8fd0, 0xcbb71d95bf8a>
 		>
 	{
@@ -952,22 +947,22 @@ namespace cppcomponents_libuv{
 
 	};
 
-	struct IPoll
+	struct IFsPoll
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xff330521, 0x0c3e, 0x4c7b, 0x85fd, 0x7cfef3e71cb4 >>
 	{
 		void Start(use<PollCallback>, cr_string path, unsigned int msinterval);
 		void Stop();
-		CPPCOMPONENTS_CONSTRUCT(IPoll, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(IFsPoll, Start, Stop);
 	};
 
-	struct IPollFactory
+	struct IFsPollFactory
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0x3facf4bd, 0xb287, 0x4521, 0xa9ab, 0x7e79c1df9da8 >>
 	{
 		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>);
 
-		CPPCOMPONENTS_CONSTRUCT(IPollFactory, Init);
+		CPPCOMPONENTS_CONSTRUCT(IFsPollFactory, Init);
 	};
 	struct ISignal
 		: public cppcomponents::define_interface <
@@ -988,7 +983,7 @@ namespace cppcomponents_libuv{
 	}; 
 
 	struct IFsEvent
-		: public cppcompononents::define_interface <
+		: public cppcomponents::define_interface <
 		cppcomponents::uuid<0xcd45427c, 0xed02, 0x408a, 0x83ae, 0xa2848df6b027>
 		, IHandle >
 	{
