@@ -1,4 +1,5 @@
 #include <cppcomponents/cppcomponents.hpp>
+#include <cppcomponents/events.hpp>
 
 // Define our buffer structure
 #if defined(__SVR4) && !defined(__unix__)
@@ -18,6 +19,8 @@
 
 #include <netinet/in.h>
 
+#define CPPCOMPONENTS_LIBUV_ONCE_INIT PTHREAD_ONCE_INIT
+
 namespace cppcomponents_libuv{
 	struct Buffer{
 		char* base;
@@ -26,9 +29,13 @@ namespace cppcomponents_libuv{
 
 	typedef int FileOsType;
 	typedef int SocketOsType;
+
 }
 #else
+#define NOMINMAX
 #include <winsock.h>
+
+
 /**
 * It should be possible to cast uv_buf_t[] to WSABUF[]
 * see http://msdn.microsoft.com/en-us/library/ms741542(v=vs.85).aspx
@@ -46,32 +53,6 @@ namespace cppcomponents_libuv{
 	typedef std::uint64_t SocketOsType;
 	typedef int FileOsType;
 
-
-	// Copied from uv.h
-	typedef struct {
-		long tv_sec;
-		long tv_nsec;
-	} TimeSpec;
-
-
-	typedef struct {
-		uint64_t st_dev;
-		uint64_t st_mode;
-		uint64_t st_nlink;
-		uint64_t st_uid;
-		uint64_t st_gid;
-		uint64_t st_rdev;
-		uint64_t st_ino;
-		uint64_t st_size;
-		uint64_t st_blksize;
-		uint64_t st_blocks;
-		uint64_t st_flags;
-		uint64_t st_gen;
-		TimeSpec st_atim;
-		TimeSpec st_mtim;
-		TimeSpec st_ctim;
-		TimeSpec st_birthtim;
-	} Stat;
 
 }
 #endif
@@ -136,15 +117,43 @@ struct addrinfo;
 	 template<>
 	 struct cross_conversion<cppcomponents_libuv::Stat*>
 		 :public trivial_conversion<cppcomponents_libuv::Stat*>{};
+	 template<>
+	 struct cross_conversion<const cppcomponents_libuv::Stat*>
+		 :public trivial_conversion<cppcomponents_libuv::Stat*>{};
 
 
  }
 
 namespace cppcomponents_libuv{
+	// Copied from uv.h
+	typedef struct {
+		long tv_sec;
+		long tv_nsec;
+	} TimeSpec;
 
+
+	typedef struct {
+		uint64_t st_dev;
+		uint64_t st_mode;
+		uint64_t st_nlink;
+		uint64_t st_uid;
+		uint64_t st_gid;
+		uint64_t st_rdev;
+		uint64_t st_ino;
+		uint64_t st_size;
+		uint64_t st_blksize;
+		uint64_t st_blocks;
+		uint64_t st_flags;
+		uint64_t st_gen;
+		TimeSpec st_atim;
+		TimeSpec st_mtim;
+		TimeSpec st_ctim;
+		TimeSpec st_birthtim;
+	} Stat;
 
 	using cppcomponents::use;
 	using cppcomponents::define_interface;
+	using cppcomponents::cr_string;
 	
 
 	// All the Interfaces declared
@@ -176,7 +185,7 @@ namespace cppcomponents_libuv{
 	struct IIdle ;
 	struct IAsync ;
 	struct IProcess ;
-	struct IFsEvents ;
+	struct IFsEvent ;
 	struct IFsPoll ;
 	struct ISignal ;
 
@@ -263,13 +272,17 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
 	> GetaddrinfoCallback;
 
-	typedef cppcomponents::delegate < void(use<IUdpSendRequest>, int status),
-		cppcomponents::uuid<0x719a0a9f, 0x6834, 0x47c5, 0xb659, 0x1fff4784bee7>
-	> UdpSendCallback;
 
 
+	typedef cppcomponents::delegate < void(use<IFsEvent>, cr_string filename,
+		int events, int status),
+		cppcomponents::uuid<0x42ea1b10, 0x261c, 0x4478, 0x89bb, 0x5203b1ff344a>
+	> FsEventCallback;
 
-
+	typedef cppcomponents::delegate < void(use<IFsPoll>, 
+		int status, const Stat* prev, const Stat* curr),
+		cppcomponents::uuid<0xb64e98a1, 0xc2a9, 0x4e5f, 0x9bd9, 0x93d0b2913f97>
+	> FsPollCallback;
 
 
 
@@ -748,12 +761,39 @@ namespace cppcomponents_libuv{
 
 		std::vector<cppcomponents::use<ICpuInfo>> CpuInfo();
 		std::vector<cppcomponents::use<IInterfaceAddress>> InterfaceAddresses();
+		std::vector<double> Loadavg();
+
+		sockaddr_in Ip4Addr(cr_string ip, int port);
+		sockaddr_in6 Ip6Addr(cr_string ip, int port);
+
+		std::string Ip4Name(sockaddr_in* src);
+		std::string Ip6Name(sockaddr_in6* src);
+
+		std::string InetNtop(int af, const void* src);
+		void InetPton(int af, cr_string src, void* dst);
+
+		std::string Exepath();
+		std::string Cwd();
+		void Chdir(cr_string dir);
+
+		std::uint64_t GetFreeMemory();
+		std::uint64_t GetTotalMemory();
+
+		std::uint64_t Hrtime();
+
+		void DisableStdioInheritance();
+
+		// No support for dl* use cross_compiler_interface::module
 
 
 		CPPCOMPONENTS_CONSTRUCT(IUvStatics, Version, VersionString,
 			Strerror, ErrName, HandleSize, RequestSize, BufferInit, Strlcpy, Strlcat, GuessHandle,
 			Getaddrinfo,Freeaddrinfo,SetupArgs,GetProcessTitle,SetProcessTitle,ResidentSetMemory,Uptime,
-			CpuInfo,InterfaceAddresses);
+			CpuInfo,InterfaceAddresses,Loadavg, Ip4Addr,Ip6Addr,
+			Ip4Name, Ip6Name,InetNtop,InetPton, Exepath, Cwd,Chdir,
+			GetFreeMemory,GetTotalMemory,Hrtime,DisableStdioInheritance
+			
+			);
 
 	};
 
@@ -848,19 +888,236 @@ namespace cppcomponents_libuv{
 
 
 
-	struct IFsStatics
+	struct IFsRawStatics
 		: public cppcomponent::define_interface <
 		cppcomponents::uuid<0x96340307, 0x442f, 0x4327, 0x8fd0, 0xcbb71d95bf8a>
 		>
 	{
 		use<IFsRequest> Close(use<ILoop>, FileOsType, use<FsCallback>);
-		use<IFsRequest> Open(use<ILoop>, cppcomponents::cr_string, int flags,
+
+		use<IFsRequest> Open(use<ILoop>, cr_string, int flags,
 			int mode, use<FsCallback>);
 
+		use<IFsRequest> Read(use<ILoop>, FileOsType file, void* buf,
+			std::size_t length, std::int64_t offset, use<FsCallback>);
+
+		use<IFsRequest> Unlink(use<ILoop>, cr_string path, use<FsCallback>);
+
+		use<IFsRequest> Write(use<ILoop>, FileOsType file, const void* buf,
+			std::size_t length, std::int64_t offset, use<FsCallback>);
+
+		use<IFsRequest> Mkdir(use<ILoop>, cr_string path, int mode, use<FsCallback>);
+		use<IFsRequest> Rmdir(use<ILoop>, cr_string, use<FsCallback>);
+
+		use<IFsRequest> Readdir( use<ILoop>, cr_string path, int flags, use<FsCallback>);
+		use<IFsRequest> Stat(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> Fstat(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> Rename(use<ILoop>, cr_string path,cr_string new_path, use<FsCallback>);
+		use<IFsRequest> Fsync(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> Fdatasync(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> Ftruncate(use<ILoop>, FileOsType file, 
+			std::int64_t offset, use<FsCallback>);
+		use<IFsRequest> Sendfile(use<ILoop>, FileOsType file_out, FileOsType file_in,
+			std::int64_t in_offset, std::size_t length, use<FsCallback>);
+		use<IFsRequest> Chmod(use<ILoop>, cr_string path,
+			int mode, use<FsCallback>);
+		use<IFsRequest> Utime(use<ILoop>, cr_string path, double atime,
+			double mtime, use<FsCallback>);
+		use<IFsRequest> Futime(use<ILoop>, FileOsType file, double atime,
+			double mtime, use<FsCallback>);
+		use<IFsRequest> Lstat(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> Link(use<ILoop>, cr_string path, cr_string new_path,
+			use<FsCallback>);
+
+		use<IFsRequest> Symlink(use<ILoop>, cr_string path,
+			cr_string new_path, int flags, use<FsCallback>);
+		use<IFsRequest> Readlink(use<ILoop>, cr_string path,
+			cr_string new_path, int flags, use<FsCallback>);
+
+		use<IFsRequest> Fchmod(use<ILoop>, FileOsType file,
+			int mode, use<FsCallback>);
+
+		use<IFsRequest> Chown(use<ILoop>, cr_string path, unsigned char uid,
+			unsigned char gid, use<FsCallback>);
+
+		use<IFsRequest> Fchown(use<ILoop>, FileOsType, unsigned char uid,
+			unsigned char gid, use<FsCallback>);
+
+
+		CPPCOMPONENTS_CONSTRUCT(IFsRawStatics,
+			Close, Open, Read, Unlink, Write, Mkdir, Rmdir, Readdir, Stat, FStat,
+			Rename, Fsync, Fdatasync, Ftruncate, Sendfile, Chmod, Utime, Futime,
+			Lstat, Link, Symlink, Readlink, Fchmod, Chown, Fchown);
 
 
 	};
 
+	struct IPoll
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0xff330521, 0x0c3e, 0x4c7b, 0x85fd, 0x7cfef3e71cb4 >>
+	{
+		void Start(use<PollCallback>, cr_string path, unsigned int msinterval);
+		void Stop();
+		CPPCOMPONENTS_CONSTRUCT(IPoll, Start, Stop);
+	};
+
+	struct IPollFactory
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0x3facf4bd, 0xb287, 0x4521, 0xa9ab, 0x7e79c1df9da8 >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>);
+
+		CPPCOMPONENTS_CONSTRUCT(IPollFactory, Init);
+	};
+	struct ISignal
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0xce633c27, 0xa8cb, 0x4752, 0xa7b9, 0x119924d606f0 >>
+	{
+		void Start(use<SignalCallback>, int signum );
+		void Stop();
+		CPPCOMPONENTS_CONSTRUCT(ISignal, Start, Stop);
+	};
+
+	struct ISignalFactory
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0x6725ccae, 0x6038, 0x4c07, 0xabe2, 0x710e674b1a06 >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>);
+
+		CPPCOMPONENTS_CONSTRUCT(ISignalFactory, Init);
+	}; 
+
+	struct IFsEvent
+		: public cppcompononents::define_interface <
+		cppcomponents::uuid<0xcd45427c, 0xed02, 0x408a, 0x83ae, 0xa2848df6b027>
+		, IHandle >
+	{
+
+	};
+
+	struct IFsEventFactory
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0xe59a4607, 0x6b30, 0x483d, 0x9743, 0x6a0d91102e51 >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>,cr_string filename,
+			use<FsEventCallback>, int flags);
+
+		CPPCOMPONENTS_CONSTRUCT(IFsEventFactory, Init);
+	}; 
+
+	struct IMutex
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0x5d6a475c, 0x82ab, 0x4ea1, 0xb564, 0xcf73b487e567 >>
+	{
+		void Lock();
+		int Trylock();
+		void Unlock();
+		void* UvHandle();
+
+		// Calls destroy in destructor
+		CPPCOMPONENTS_CONSTRUCT(IMutex, Lock, Trylock, Unlock,UvHandle);
+	};
+
+	struct IMutexFactory
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0x778eef11, 0x1d5e, 0x40f5, 0xb9f5, 0xdb0808ceb18c >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init();
+
+		CPPCOMPONENTS_CONSTRUCT(IMutexFactory, Init);
+	};
+
+	struct IRwlock
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0x3e547e44, 0xda43, 0x4457, 0xaee2, 0xb985f1ee436e >>
+	{
+		void Rdlock();
+		int Tryrdlock();
+		void Rdunlock();
+		void Wrlock();
+		int Trywrlock();
+		void Wrunlock();
+
+
+		// Calls destroy in destructor
+		CPPCOMPONENTS_CONSTRUCT(IRwlock, Lock, Trylock, Unlock);
+	};
+
+	struct IRwlockFactory
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0x7a8087ac, 0x4a33, 0x46b1, 0x8c28, 0xdc0066ed590c >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init();
+
+		CPPCOMPONENTS_CONSTRUCT(IRwlockFactory, Init);
+	};
+
+	struct ISemaphore
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0xa0c6b903, 0x62be, 0x462a, 0xbd16, 0x5be9dabe37b4 >>
+	{
+		void Post();
+		void Wait();
+		int Trywait();
+
+		// Calls destroy in destructor
+		CPPCOMPONENTS_CONSTRUCT(ISemaphore, Lock, Trylock, Unlock);
+	};
+
+	struct ISemaphoreFactory
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0x8cf50ef7, 0x747c, 0x4bcd, 0xbf5d, 0x59cdbf5e9074 >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init(unsigned int value);
+
+		CPPCOMPONENTS_CONSTRUCT(ISemaphoreFactory, Init);
+	};
+
+	struct IConditionVariable
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0xe39e7414, 0x5caa, 0x4cb3, 0x8083, 0x925a432bb933 >>
+	{
+		void Signal();
+		void Broadcast();
+		void Wait(use<IMutex>);
+		int Timedwait(use<IMutex>, std::uint64_t timeout);
+
+		// Calls destroy in destructor
+		CPPCOMPONENTS_CONSTRUCT(IConditionVariable, Signal,Broadcast,
+			Wait,Timedwait);
+	};
+
+	struct IConditionVariableFactory
+		: cppcomponents::define_interface <
+		cppcomponents::uuid < 0x4f1e7975, 0x8652, 0x42e4, 0x8fd7, 0xb79b4900864e >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init();
+
+		CPPCOMPONENTS_CONSTRUCT(IConditionVariableFactory, Init);
+	};
+
+
+	struct IBarrier
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0x69a0cb70, 0x74d1, 0x47d5, 0x8454, 0xfa04640f1ec9 >>
+	{
+		void Wait();
+
+		CPPCOMPONENTS_CONSTRUCT(IBarrier, Wait);
+	};
+
+	struct IBarrierFactory
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0xd6bbc581, 0xcbe2, 0x498f, 0x861b, 0x6d9e29aef114 >>
+	{
+		use<cppcomponents::InterfaceUnknown> Init(unsigned int count);
+	};
+
+
+	// uv_once is not implemented use std::once;
+
+
+	// Thead functions not implemented, use std::thread
 
 
 }
