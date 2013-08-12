@@ -146,6 +146,9 @@ namespace cppcomponents_libuv{
 	 struct cross_conversion<const cppcomponents_libuv::TimeSpec*>
 		 :public trivial_conversion<const cppcomponents_libuv::TimeSpec*>{};
 	 template<>
+	 struct cross_conversion<cppcomponents_libuv::Stat>
+		 :public trivial_conversion<cppcomponents_libuv::Stat>{};
+	 template<>
 	 struct cross_conversion<cppcomponents_libuv::Stat*>
 		 :public trivial_conversion<cppcomponents_libuv::Stat*>{};
 	 template<>
@@ -176,7 +179,6 @@ namespace cppcomponents_libuv{
 	struct IWriteRequest;
 	struct IConnectRequest;
 	struct IUdpSendRequest;
-	struct IUdpRecvRequest;
 	struct IFsRequest;
 	struct IWorkRequest;
 
@@ -281,7 +283,7 @@ namespace cppcomponents_libuv{
 
 	typedef cppcomponents::delegate < void (use<IGetAddrinfoRequest>, int status, addrinfo* res),
 		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
-	> GetaddrinfoCallback;
+	> GetAddrinfoCallback;
 
 
 
@@ -315,7 +317,7 @@ namespace cppcomponents_libuv{
 		int RequestType();
 		int Cancel();
 		void* GetData();
-		void* SetData(void*);
+		void SetData(void*);
 
 		CPPCOMPONENTS_CONSTRUCT(IRequest, RequestType, Cancel,GetData,SetData);
 	};
@@ -789,7 +791,7 @@ namespace cppcomponents_libuv{
 		std::size_t Strlcat(char* dst, const char* src, std::size_t size);
 		int GuessHandle(FileOsType file);
 
-		void Getaddrinfo(cppcomponents::use<ILoop>, cppcomponents::use<GetaddrinfoCallback>, cppcomponents::cr_string node,
+		void Getaddrinfo(cppcomponents::use<ILoop>, cppcomponents::use<GetAddrinfoCallback>, cppcomponents::cr_string node,
 			cppcomponents::cr_string service, addrinfo* hints);
 
 		void Freeaddrinfo(addrinfo* ai);
