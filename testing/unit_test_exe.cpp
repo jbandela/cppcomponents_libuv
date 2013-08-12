@@ -60,20 +60,23 @@ std::atomic<int> work_count{ 0 };
 
 
 template<class T>
-struct work : std::enable_shared_from_this<work<T>>, work_move<work<T>, T>{
+struct work : std::enable_shared_from_this<work<T>>, ,storage_and_error<T>,work_move<work<T>, T>{
 	uv_work_t w_;
 	std::atomic_flag then_called_;
 	std::atomic<bool> has_then_;
+	std::atomic_flag then_added_;
 	std::function < void()> then_;
 	std::function < T()> worker;
 	std::atomic<bool> started_;
 
 
-	storage_and_error<T> storage_;
+	using storage_and_error<T>::do_assign;
+	using storage_and_error<T>::get;
+	using storage_and_error<T>::set;
+	using storage_and_error<T>::set_error;
 
 	std::shared_ptr<work> shared_self_;
 
-	bool then_added_;
 
 	uv_async_t async_start_;
 	uv_async_t async_start_on_default_loop_;
@@ -81,7 +84,7 @@ struct work : std::enable_shared_from_this<work<T>>, work_move<work<T>, T>{
 	template<class F>
 	work(F f)
 		: w_{}, then_called_{ ATOMIC_FLAG_INIT },
-		has_then_{ false }, worker(f), then_added_(false), started_(false)
+		has_then_{ false }, worker(f), then_added_{ATOMIC_FLAG_INIT}, started_(false)
 	{
 		auto tid = uv_thread_self();
 		assert(tid = maintid.get());
