@@ -265,7 +265,7 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xa585d683, 0x22eb, 0x453d, 0xbcc4, 0x79d4c328afb1>
 	> ExitCallback;
 
-	typedef cppcomponents::delegate < void(use<IHandle>, void* arg),
+	typedef cppcomponents::delegate < void(use<IHandle>),
 		cppcomponents::uuid<0x6b443ec5, 0x32ca, 0x4d3d, 0x99e0, 0xb2b1a33c3111>
 	> WalkCallback;
 
@@ -404,24 +404,23 @@ namespace cppcomponents_libuv{
 		int HandleType();
 		bool IsActive();
 		void Close(cppcomponents::use<CloseCallback>);
+		void Ref();
+		void Unref();
+		bool HasRef();
 		void* UvHandle();
 
-		CPPCOMPONENTS_CONSTRUCT(IHandle, IsActive,HandleType,Close,UvHandle);
+		CPPCOMPONENTS_CONSTRUCT(IHandle, IsActive,HandleType,Close,Ref,Unref,HasRef,UvHandle);
 	};
 
 
 	struct ILoop
 		: cppcomponents::define_interface < cppcomponents::uuid < 0xfc3c5e3c , 0x10af , 0x47a3 , 0x89fc , 0xdaea39cb9d58>>
 	{
-		int RunDefault();
-		int RunOnce();
-		int RunNoWait();
+		void Run();
+		void RunOnce();
+		void RunNoWait();
 
 		void Stop();
-		void Ref();
-		void UnRef();
-		int HasRef();
-
 		void UpdateTime();
 		std::uint64_t Now();
 		int BackendFd();
@@ -429,13 +428,13 @@ namespace cppcomponents_libuv{
 
 		void* UvHandle();
 
-		void Walk(cppcomponents::use<WalkCallback>,void* arg);
+		void Walk(cppcomponents::use<WalkCallback>);
 
 		use<IWorkRequest> QueueWork(cppcomponents::use<WorkCallback>, cppcomponents::use<AfterWorkCallback>);
 
 
-		CPPCOMPONENTS_CONSTRUCT(ILoop, RunDefault, RunOnce, RunNoWait,
-			Stop,Ref,UnRef,HasRef,UpdateTime,Now,BackendFd, BackendTimeout
+		CPPCOMPONENTS_CONSTRUCT(ILoop, Run, RunOnce, RunNoWait,
+			Stop,UpdateTime,Now,BackendFd, BackendTimeout
 			,UvHandle,Walk);
 	};
 

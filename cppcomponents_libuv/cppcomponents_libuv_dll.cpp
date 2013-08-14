@@ -366,3 +366,158 @@ struct ImpWorkRequest
 
 
 };
+
+
+template<class DelegateType>
+void* delegate_to_void(use<DelegateType> cb){
+	return cb.get_portable_base_addref();
+}
+
+template<class DelegateType>
+use<DelegateType> delegate_from_void(void* data){
+	auto pb = static_cast<portable_base*>(data);
+	use<DelegateType> cb(cppcomponents::reinterpret_portable_base<DelegateType::template Interface>(pb), false);
+	return cb;
+}
+
+
+typedef runtime_class<dummyid, object_interfaces<IHandle>, factory_interface<NoConstructorFactoryInterface>> Handle_t;
+
+template<class HType>
+struct ImpHandleBase{
+
+	uv_handle_t* handle_;
+	HType* get(){
+		return reinterpret_cast<HType*>(handle_);
+	}
+
+	ImpHandleBase(HType* h):handle_{reinterpret_cast<uv_handle_t*>(h)}
+	{}
+
+	int HandleType(){
+		return handle_->type;
+	}
+
+	bool IsActive(){
+		return uv_is_active(handle_) != 0;
+	}
+
+	static void CloseCallbackRaw(uv_handle_t *h){
+		auto cb = delegate_from_void<CloseCallback>(h->data);
+		h->data = nullptr;
+		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
+	}
+
+	void Close(use<CloseCallback> cb){
+		handle_->data = delegate_to_void(cb);
+		uv_close(handle_, CloseCallbackRaw);
+	}
+
+	void Ref(){
+		uv_ref(handle_);
+	}
+
+	void Unref(){
+		uv_unref(handle_);
+	}
+
+	bool HasRef(){
+		return uv_has_ref(handle_) != 0;
+	}
+
+	void* UvHandle(){
+		return handle_;
+	}
+
+
+};
+
+struct ImpHandleNonOwning :
+	ImpHandleBase<uv_handle_t>,
+	implement_runtime_class<ImpHandleNonOwning, Handle_t>{
+
+		using ImpHandleBase<uv_handle_t>::HandleType;
+		using ImpHandleBase<uv_handle_t>::IsActive;
+		using ImpHandleBase<uv_handle_t>::Close;
+		using ImpHandleBase<uv_handle_t>::Ref;
+		using ImpHandleBase<uv_handle_t>::Unref;
+		using ImpHandleBase<uv_handle_t>::HasRef;
+		using ImpHandleBase<uv_handle_t>::UvHandle;
+
+
+		ImpHandleNonOwning(uv_handle_t* h) : ImpHandleBase<uv_handle_t>( h )
+		{}
+
+
+
+};
+
+struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
+
+	// Whether we own the loop, so we can delete it in destructor
+	bool owner_;
+	uv_loop_t* loop_;
+	ImpLoop() : owner_{ true }, loop_{ uv_loop_new() }
+	{
+	}
+
+	ImpLoop(uv_loop_t* loop, bool owner = false) : owner_{ false }, loop_{ loop }
+	{}
+
+	~ImpLoop(){
+		if (owner_){
+			uv_loop_delete(loop_);
+		}
+	}
+	
+	static use<ILoop> DefaultLoop(){
+		struct uniq{};
+		return cross_compiler_interface::detail::safe_static_init < ImpLoop, uniq>::get(uv_default_loop(), false).QueryInterface<ILoop>();
+	}
+
+	void Run(){
+		throw_if_error(uv_run(loop_, UV_RUN_DEFAULT));
+	}
+	void RunOnce(){
+		throw_if_error(uv_run(loop_, UV_RUN_ONCE));
+	}
+	void RunNoWait(){
+		throw_if_error(uv_run(loop_, UV_RUN_NOWAIT));
+	}
+
+	void Stop(){
+		uv_stop(loop_);
+	}
+
+	void UpdateTime(){
+		uv_update_time(loop_);
+	}
+
+	std::uint64_t Now(){
+		return uv_now(loop_);
+	}
+
+	int BackendFd(){
+		return uv_backend_fd(loop_);
+	}
+
+	int BackendTimeout(){
+		return uv_backend_timeout(loop_);
+	}
+
+	void* UvHandle(){
+		return loop_;
+	}
+
+	static void WalkCallbackRaw(uv_handle_t *h, void* arg){
+		auto cb = delegate_from_void<WalkCallback>(arg);
+		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
+	}
+
+	void Walk(use<WalkCallback> cb){
+		uv_walk(loop_, WalkCallbackRaw, delegate_to_void(cb));
+	}
+
+
+
+	};
