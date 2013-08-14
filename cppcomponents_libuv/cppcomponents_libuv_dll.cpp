@@ -46,6 +46,10 @@ struct ImpRequest
 	void* GetData(){ return data_; }
 	void SetData(void* v){ data_ = v; };
 
+	void* UvHandle(){
+		return &static_cast<Derived*>(this)->uv_t_;
+	}
+
 	ImpRequest() : data_(nullptr){}
 
 	typedef ImpRequest imp_t;
@@ -59,6 +63,7 @@ struct ImpGetAddrinfoRequest
 	using imp_t::Cancel;
 	using imp_t::GetData;
 	using imp_t::SetData;
+	using imp_t::UvHandle;
 
 
 	uv_getaddrinfo_t uv_t_;
@@ -74,10 +79,10 @@ struct ImpGetAddrinfoRequest
 	ImpGetAddrinfoRequest(){
 		throw error_not_implemented();
 	}
-	ImpGetAddrinfoRequest(use<GetAddrinfoCallback> cb, use<clv::ILoop> loop) 
-		: cb_(cb),self_(this->QueryInterface<IGetAddrinfoRequest>()),
+	ImpGetAddrinfoRequest(use<GetAddrinfoCallback> cb, use<clv::ILoop> loop)
+		: cb_(cb), self_(this->QueryInterface<IGetAddrinfoRequest>()),
 		loop_(loop)
-		
+
 	{
 		uv_t_.data = this;
 	}
@@ -86,11 +91,11 @@ struct ImpGetAddrinfoRequest
 		auto& imp = *static_cast<ImpGetAddrinfoRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.cb_(s, status,res);
+		imp.cb_(s, status, res);
 	}
 
 
-}; 
+};
 struct ImpShutdownRequest
 	: public ImpRequest<ImpShutdownRequest, ShutdownRequest_t>
 {
@@ -99,6 +104,8 @@ struct ImpShutdownRequest
 	using imp_t::Cancel;
 	using imp_t::GetData;
 	using imp_t::SetData;
+	using imp_t::UvHandle;
+
 
 
 	uv_shutdown_t uv_t_;
@@ -139,6 +146,8 @@ struct ImpWriteRequest
 	using imp_t::Cancel;
 	using imp_t::GetData;
 	using imp_t::SetData;
+	using imp_t::UvHandle;
+
 
 
 	uv_write_t uv_t_;
@@ -183,6 +192,7 @@ struct ImpConnectRequest
 	using imp_t::Cancel;
 	using imp_t::GetData;
 	using imp_t::SetData;
+	using imp_t::UvHandle;
 
 
 	uv_connect_t uv_t_;
@@ -224,6 +234,7 @@ struct ImpUdpSendRequest
 	using imp_t::Cancel;
 	using imp_t::GetData;
 	using imp_t::SetData;
+	using imp_t::UvHandle;
 
 
 	uv_udp_send_t uv_t_;
@@ -265,6 +276,7 @@ struct ImpFsRequest
 	using imp_t::Cancel;
 	using imp_t::GetData;
 	using imp_t::SetData;
+	using imp_t::UvHandle;
 
 
 	uv_fs_t uv_t_;
@@ -326,6 +338,7 @@ struct ImpWorkRequest
 	using imp_t::Cancel;
 	using imp_t::GetData;
 	using imp_t::SetData;
+	using imp_t::UvHandle;
 
 
 	uv_work_t uv_t_;
@@ -342,12 +355,12 @@ struct ImpWorkRequest
 	ImpWorkRequest(){
 		throw error_not_implemented();
 	}
-	ImpWorkRequest(use<WorkCallback> cb,use<AfterWorkCallback> awcb,
-		use<clv::ILoop> loop) 
+	ImpWorkRequest(use<WorkCallback> cb, use<AfterWorkCallback> awcb,
+		use<clv::ILoop> loop)
 		: cb_(cb), awcb_(awcb),
 		self_(this->QueryInterface<IWorkRequest>()),
 		loop_(loop)
-		
+
 	{
 		uv_t_.data = this;
 	}
@@ -387,11 +400,13 @@ template<class HType>
 struct ImpHandleBase{
 
 	uv_handle_t* handle_;
+	bool closed_;
+
 	HType* get(){
 		return reinterpret_cast<HType*>(handle_);
 	}
 
-	ImpHandleBase(HType* h):handle_{reinterpret_cast<uv_handle_t*>(h)}
+	ImpHandleBase(HType* h) : handle_{ reinterpret_cast<uv_handle_t*>(h) }, closed_{false}
 	{}
 
 	int HandleType(){
@@ -408,7 +423,8 @@ struct ImpHandleBase{
 		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
 	}
 
-	void Close(use<CloseCallback> cb){
+	void CloseRaw(use<CloseCallback> cb){
+		closed_ = true;
 		handle_->data = delegate_to_void(cb);
 		uv_close(handle_, CloseCallbackRaw);
 	}
@@ -424,7 +440,9 @@ struct ImpHandleBase{
 	bool HasRef(){
 		return uv_has_ref(handle_) != 0;
 	}
-
+	bool IsClosing(){
+		return uv_is_closing(handle_) != 0;
+	}
 	void* UvHandle(){
 		return handle_;
 	}
@@ -438,14 +456,15 @@ struct ImpHandleNonOwning :
 
 		using ImpHandleBase<uv_handle_t>::HandleType;
 		using ImpHandleBase<uv_handle_t>::IsActive;
-		using ImpHandleBase<uv_handle_t>::Close;
+		using ImpHandleBase<uv_handle_t>::CloseRaw;
+		using ImpHandleBase<uv_handle_t>::IsClosing;
 		using ImpHandleBase<uv_handle_t>::Ref;
 		using ImpHandleBase<uv_handle_t>::Unref;
 		using ImpHandleBase<uv_handle_t>::HasRef;
 		using ImpHandleBase<uv_handle_t>::UvHandle;
 
 
-		ImpHandleNonOwning(uv_handle_t* h) : ImpHandleBase<uv_handle_t>( h )
+		ImpHandleNonOwning(uv_handle_t* h) : ImpHandleBase<uv_handle_t>(h)
 		{}
 
 
@@ -469,7 +488,7 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 			uv_loop_delete(loop_);
 		}
 	}
-	
+
 	static use<ILoop> DefaultLoop(){
 		struct uniq{};
 		return cross_compiler_interface::detail::safe_static_init < ImpLoop, uniq>::get(uv_default_loop(), false).QueryInterface<ILoop>();
@@ -514,10 +533,146 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
 	}
 
-	void Walk(use<WalkCallback> cb){
+	void WalkRaw(use<WalkCallback> cb){
 		uv_walk(loop_, WalkCallbackRaw, delegate_to_void(cb));
+	}
+
+	use<IWorkRequest> QueueWorkRaw(use<WorkCallback> wcb, use<AfterWorkCallback> awcb){
+		auto wr = ImpWorkRequest::create(wcb, awcb, this->QueryInterface<ILoop>()).QueryInterface<IWorkRequest>();
+		uv_queue_work(loop_, reinterpret_cast<uv_work_t*>(wr.UvHandle()),ImpWorkRequest::RequestCb,ImpWorkRequest::AfterRequestCb);
+		return wr;
 	}
 
 
 
-	};
+};
+
+
+uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
+	try{
+		return uv_buf_init(new char[suggested_size], suggested_size);
+	}
+	catch (std::exception&){
+		return uv_buf_init(nullptr, 0);
+	}
+}
+
+template<class HType,class Derived,class NonOwning = ImpStreamNonOwning>
+struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
+	using ImpHandleBase<uv_stream_t>::HandleType;
+	using ImpHandleBase<uv_stream_t>::IsActive;
+	using ImpHandleBase<uv_stream_t>::CloseRaw;
+	using ImpHandleBase<uv_stream_t>::Ref;
+	using ImpHandleBase<uv_stream_t>::Unref;
+	using ImpHandleBase<uv_stream_t>::HasRef;
+	using ImpHandleBase<uv_stream_t>::UvHandle;
+
+	typedef cppcomponents::delegate < void(int) > ConnectionCallbackHelper;
+	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf) > ReadCallbackHelper;
+	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf, int pending) > Read2CallbackHelper;
+
+	use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback> cb){
+		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
+		return ImpShutdownRequest::create(cb, is).QueryInterface<IShutdownRequest>();
+	}
+
+	static void ConnectionCallbackRaw(uv_stream_t* server, int status){
+		auto cb = delegate_from_void<ConnectionCallbackHelper>(server->data);
+		server->data = false;
+		cb(status);
+	}
+
+	void Listen(int backlog, use<ConnectCallback> cb){
+
+		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
+		auto cbh = make_delegate<ConnectionCallbackHelper>([is,cb](int status){
+			cb(is, status);
+		});
+		this->handle_->data = delegate_to_void(cbh);
+		throw_if_error(uv_listen(this->get(), backlog, ConnectionCallbackRaw));
+	}
+
+	use<clv::IStream> Accept(){
+		auto is = Derived::create().QueryInterface<clv::IStream>();
+		uv_accept(get(), reinterpret_cast<uv_stream_t*>(is.UvHandle()));
+		return is;
+	}
+
+	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
+		Buffer b;
+		b.base = buf.base;
+		b.len = buf.len;
+
+		auto cb = delegate_from_void<ReadCallbackHelper>(stream->data);
+		cb(nread, b);
+
+		delete buf.base;
+	}
+
+	void ReadStart(use<ReadCallback> cb){
+		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
+		auto cbh = make_delegate<ReadCallbackHelper>([is, cb](std::ptrdiff_t nread, Buffer buf){
+			cb(is, nread, buf);
+		});
+		this->handle_.data = delegate_to_void(cbh);
+		uv_read_start(this->get(), AllocCallbackRaw, ReadCallbackRaw);
+
+	}
+
+	void ReadStop(){
+		uv_read_stop(this->get());
+	}
+	static void Read2CallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf,int pending){
+		Buffer b;
+		b.base = buf.base;
+		b.len = buf.len;
+
+		auto cb = delegate_from_void<Read2CallbackHelper>(stream->data);
+		cb(nread, b,pending);
+
+		delete buf.base;
+	}
+	void Read2Start(use<Read2Callback> cb){
+		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
+		auto cbh = make_delegate<Read2CallbackHelper>([is, cb](std::ptrdiff_t nread, Buffer buf,int pending){
+			cb(is, nread, buf,pending);
+		});
+		this->handle_.data = delegate_to_void(cbh);
+		uv_read_start(this->get(), AllocCallbackRaw, Read2CallbackRaw);
+
+	}
+
+	void Read2Stop(){
+		uv_read_stop(this->get());
+
+	}
+
+	use<IWriteRequest> Write(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
+		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
+		auto wr = ImpWriteRequest::create(cb, this->QueryInterface<clv::IStream>());
+		throw_if_error(uv_write(static_cast<uv_write_t*>(wr.UvHandle()), this->get(), reinterpret_cast<uv_buf_t*>(bufs), bufcnt,
+			ImpWriteRequest::RequestCb));
+
+	}	
+	use<IWriteRequest> Write2(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
+		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
+		auto wr = ImpWriteRequest::create(cb, this->QueryInterface<clv::IStream>());
+		throw_if_error(uv_write2(static_cast<uv_write_t*>(wr.UvHandle()), this->get(), reinterpret_cast<uv_buf_t*>(bufs), bufcnt,
+			static_cast<uv_stream_t*>(is.UvHandle()),ImpWriteRequest::RequestCb));
+
+	}
+
+	bool IsReadable(){
+		return uv_is_readable(this->get()) != 0;
+	}
+
+	bool IsWritable(){
+		return uv_is_writable(this->get()) != 0;
+	}
+
+	void SetBlocking(bool blocking){
+		uv_stream_set_blocking(this->get(), blocking ? 1 : 0);
+	}
+
+
+};

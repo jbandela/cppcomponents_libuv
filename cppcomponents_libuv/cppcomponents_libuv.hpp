@@ -157,6 +157,56 @@ namespace cppcomponents_libuv{
 
 
  }
+
+ namespace cppcomponents{
+	 template<>
+	 struct uuid_of<cppcomponents_libuv::Buffer>
+	 {
+		 typedef cppcomponents::uuid<0x032e4f42, 0x8ba7, 0x4cb3, 0xa55e, 0x25dcecbe26a4> uuid_type;
+	 
+	 };
+	 template<>
+	 struct uuid_of<sockaddr>
+	 {
+		 typedef cppcomponents::uuid<0xf283fe4f, 0x50a6, 0x4ec4, 0xa287, 0x015da4711d39> uuid_type;
+
+	 };
+	 template<>
+	 struct uuid_of<sockaddr_in6>
+	 {
+		 typedef cppcomponents::uuid<0xc3d8846c, 0x9dac, 0x45b8, 0xbe1d, 0xe4ee8f997f39> uuid_type;
+
+	 };
+	 template<>
+	 struct uuid_of<sockaddr_in>
+	 {
+		 typedef cppcomponents::uuid<0xa1d727db, 0x962e, 0x4809, 0x89f6, 0x6536c6435396> uuid_type;
+
+	 };
+	 template<>
+	 struct uuid_of<addrinfo>
+	 {
+		 typedef cppcomponents::uuid<0x68392e5e, 0x5a4b, 0x4e71, 0x89db, 0xd335896cd8b7> uuid_type;
+
+	 };
+
+
+	 template<>
+	 struct uuid_of<cppcomponents_libuv::TimeSpec>
+	 {
+		 typedef cppcomponents::uuid<0x4b6f550d, 0xd170, 0x46a4, 0x9cb5, 0xfaa8f6dc179e> uuid_type;
+
+	 };
+
+	 template<>
+	 struct uuid_of<cppcomponents_libuv::Stat>
+	 {
+		 typedef cppcomponents::uuid<0xb1fa1121, 0xf2ce, 0x4c03, 0x85a8, 0xbd414711ed00> uuid_type;
+
+	 };
+
+
+ }
 namespace cppcomponents_libuv{
 
 	using cppcomponents::use;
@@ -318,8 +368,9 @@ namespace cppcomponents_libuv{
 		int Cancel();
 		void* GetData();
 		void SetData(void*);
+		void* UvHandle();
 
-		CPPCOMPONENTS_CONSTRUCT(IRequest, RequestType, Cancel,GetData,SetData);
+		CPPCOMPONENTS_CONSTRUCT(IRequest, RequestType, Cancel,GetData,SetData,UvHandle);
 	};
 
 
@@ -403,13 +454,15 @@ namespace cppcomponents_libuv{
 	{
 		int HandleType();
 		bool IsActive();
-		void Close(cppcomponents::use<CloseCallback>);
+		void CloseRaw(cppcomponents::use<CloseCallback>);
 		void Ref();
 		void Unref();
 		bool HasRef();
+		bool IsClosing();
 		void* UvHandle();
 
-		CPPCOMPONENTS_CONSTRUCT(IHandle, IsActive,HandleType,Close,Ref,Unref,HasRef,UvHandle);
+
+		CPPCOMPONENTS_CONSTRUCT(IHandle, HandleType,IsActive,CloseRaw,Ref,Unref,HasRef,IsClosing,UvHandle);
 	};
 
 
@@ -428,14 +481,14 @@ namespace cppcomponents_libuv{
 
 		void* UvHandle();
 
-		void Walk(cppcomponents::use<WalkCallback>);
+		void WalkRaw(cppcomponents::use<WalkCallback>);
 
-		use<IWorkRequest> QueueWork(cppcomponents::use<WorkCallback>, cppcomponents::use<AfterWorkCallback>);
+		use<IWorkRequest> QueueWorkRaw(cppcomponents::use<WorkCallback>, cppcomponents::use<AfterWorkCallback>);
 
 
 		CPPCOMPONENTS_CONSTRUCT(ILoop, Run, RunOnce, RunNoWait,
 			Stop,UpdateTime,Now,BackendFd, BackendTimeout
-			,UvHandle,Walk);
+			,UvHandle,WalkRaw,QueueWorkRaw);
 	};
 
 	struct ILoopStatics
@@ -459,25 +512,24 @@ namespace cppcomponents_libuv{
 		0x9b7c72d8 , 0xb955 , 0x4163 , 0x9e1f , 0x0c905b60c58f
 		>,IHandle>
 	{
-		use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback>);
-		void Listen(int backlog, cppcomponents::use<ConnectionCallback>);
+		use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback>);
+		void ListenRaw(int backlog, cppcomponents::use<ConnectionCallback>);
 		use<IStream> Accept();
 
-		void ReadStart(cppcomponents::use<AllocCallback>,cppcomponents::use<ReadCallback>);
+		void ReadStartRaw(cppcomponents::use<ReadCallback>);
 		void ReadStop();
-		void Read2Start(cppcomponents::use<AllocCallback>, cppcomponents::use<Read2Callback>);
-		void Write(Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
-		void Write2(Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
+		void Read2StartRaw(cppcomponents::use<Read2Callback>);
+		void WriteRaw(Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
+		void Write2Raw(Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
 		bool IsReadable();
 		bool IsWritable();
 		void SetBlocking(bool blocking);
-		bool IsClosing();
 
 
 
 
-		CPPCOMPONENTS_CONSTRUCT(IStream, Shutdown,Listen,Accept,ReadStart,ReadStop,Read2Start,Write,
-			Write2,IsReadable,IsWritable,SetBlocking,IsClosing);
+		CPPCOMPONENTS_CONSTRUCT(IStream, ShutdownRaw,ListenRaw,Accept,ReadStartRaw,ReadStop,Read2StartRaw,WriteRaw,
+			Write2Raw,IsReadable,IsWritable,SetBlocking);
 
 	};
 
@@ -495,11 +547,11 @@ namespace cppcomponents_libuv{
 		void Bind6(sockaddr_in6);
 		void GetSockName(sockaddr* name, int* namelen);
 		void GetPeerName(sockaddr* name, int namelen);
-		use<IConnectRequest> Connect(sockaddr_in address, cppcomponents::use<ConnectCallback>);
-		use<IConnectRequest> Connect6(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
+		use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback>);
+		use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
 
 		CPPCOMPONENTS_CONSTRUCT(ITcpStream, Open,NoDelay,KeepAlive,SimultaneousAccepts,
-			Bind,Bind6,GetSockName,GetPeerName,Connect,Connect6);
+			Bind,Bind6,GetSockName,GetPeerName,ConnectRaw,Connect6Raw);
 	};
 
 	struct ITcpStreamFactory
@@ -531,15 +583,16 @@ namespace cppcomponents_libuv{
 		void SetMulticastTtl(std::int32_t ttl);
 		void SetBroadcast(bool on);
 		void SetTtl(std::int32_t ttl);
-		use<IUdpSendRequest> Send(Buffer* bufs, int buffcnt, sockaddr_in addr,
+		use<IUdpSendRequest> SendRaw(Buffer* bufs, int buffcnt, sockaddr_in addr,
 			cppcomponents::use<UdpSendCallback> send_cb);
-		use<IUdpSendRequest> Send6(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
+		use<IUdpSendRequest> Send6Raw(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
 			cppcomponents::use<UdpSendCallback> send_cb);
 
-		void RecvStart(cppcomponents::use<AllocCallback>, cppcomponents::use<UdpRecvCallback>);
+		void RecvStartRaw(cppcomponents::use<AllocCallback>, cppcomponents::use<UdpRecvCallback>);
 		void RecvStop();
 
-		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,Bind,Bind6,GetSockName,SetMembership);
+		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,Bind,Bind6,GetSockName,SetMembership,
+			SetMulticastLoop,SetMulticastTtl,SetBroadcast,SetTtl,SendRaw,Send6Raw,RecvStartRaw,RecvStop);
 	};
 
 	struct IUdpStreamFactory
@@ -591,10 +644,10 @@ namespace cppcomponents_libuv{
 	{
 		void Open(FileOsType file);
 		void Bind(cppcomponents::cr_string name);
-		use<IConnectRequest> Connect(cppcomponents::cr_string name, cppcomponents::use<ConnectCallback> cb);
+		use<IConnectRequest> ConnectRaw(cppcomponents::cr_string name, cppcomponents::use<ConnectCallback> cb);
 		void PendingInstances(int count);
 
-		CPPCOMPONENTS_CONSTRUCT(IPipe, Open, Bind, Connect, PendingInstances);
+		CPPCOMPONENTS_CONSTRUCT(IPipe, Open, Bind, ConnectRaw, PendingInstances);
 
 	};
 
@@ -619,10 +672,10 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xa7f582ac , 0x8b78 , 0x4988 , 0xad12 , 0x7074bbde7e27>,
 		IHandle >
 	{
-		void Start(int events, cppcomponents::use<PollCallback>);
+		void StartRaw(int events, cppcomponents::use<PollCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(IPoll, Start,Stop);
+		CPPCOMPONENTS_CONSTRUCT(IPoll, StartRaw,Stop);
 
 	};
 
@@ -647,10 +700,10 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xc15bdb50 , 0x4fc6 , 0x4224 , 0x984d , 0x4a9e57f3d7ee		>,
 		IHandle >
 	{
-		void Start(cppcomponents::use<PrepareCallback>);
+		void StartRaw(cppcomponents::use<PrepareCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(IPrepare, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(IPrepare, StartRaw, Stop);
 	};
 
 	// DefaultFactory works for IPrepare Init
@@ -665,10 +718,10 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0x313b4d56 , 0x1def , 0x431d , 0x84fb , 0x48556b725e20		>,
 		IHandle >
 	{
-		void Start(cppcomponents::use<CheckCallback>);
+		void StartRaw(cppcomponents::use<CheckCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(ICheck, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(ICheck, StartRaw, Stop);
 	};
 
 	inline std::string CheckId(){ return "cppcomponents_lib_uv_dll!Check"; }
@@ -681,10 +734,10 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xdc2333a3 , 0xa2c8 , 0x47c4 , 0xbfde , 0xee062553c8df>,
 		IHandle >
 	{
-		void Start(cppcomponents::use<IdleCallback>);
+		void StartRaw(cppcomponents::use<IdleCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(IIdle, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(IIdle, StartRaw, Stop);
 	};	
 
 	inline std::string IdleId(){ return "cppcomponents_lib_uv_dll!Idle"; }
@@ -721,13 +774,13 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0x5f941871 , 0x8e16 , 0x4c21 , 0xbec6 , 0x33ee71c66afb>,
 		IHandle >
 	{
-		void Start(cppcomponents::use<TimerCallback>,std::uint64_t timeout, std::uint64_t repeat);
+		void StartRaw(cppcomponents::use<TimerCallback>,std::uint64_t timeout, std::uint64_t repeat);
 		void Stop();
 		void Again();
 		void SetRepeat(std::uint64_t repeat);
 		std::uint64_t GetRepeat();
 
-		CPPCOMPONENTS_CONSTRUCT(ITimer,Start,Stop,Again,SetRepeat,GetRepeat);
+		CPPCOMPONENTS_CONSTRUCT(ITimer,StartRaw,Stop,Again,SetRepeat,GetRepeat);
 	};
 
 
@@ -790,7 +843,7 @@ namespace cppcomponents_libuv{
 		std::size_t Strlcat(char* dst, const char* src, std::size_t size);
 		int GuessHandle(FileOsType file);
 
-		void Getaddrinfo(cppcomponents::use<ILoop>, cppcomponents::use<GetAddrinfoCallback>, cppcomponents::cr_string node,
+		use<IGetAddrinfoRequest> GetaddrinfoRaw(cppcomponents::use<ILoop>, cppcomponents::use<GetAddrinfoCallback>, cppcomponents::cr_string node,
 			cppcomponents::cr_string service, addrinfo* hints);
 
 		void Freeaddrinfo(addrinfo* ai);
@@ -831,7 +884,7 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IUvStatics, Version, VersionString,
 			Strerror, ErrName, HandleSize, RequestSize, BufferInit, Strlcpy, Strlcat, GuessHandle,
-			Getaddrinfo,Freeaddrinfo,SetupArgs,GetProcessTitle,SetProcessTitle,ResidentSetMemory,Uptime,
+			GetaddrinfoRaw,Freeaddrinfo,SetupArgs,GetProcessTitle,SetProcessTitle,ResidentSetMemory,Uptime,
 			CpuInfo,InterfaceAddresses,Loadavg, Ip4Addr,Ip6Addr,
 			Ip4Name, Ip6Name,InetNtop,InetPton, Exepath, Cwd,Chdir,
 			GetFreeMemory,GetTotalMemory,Hrtime,DisableStdioInheritance
@@ -948,61 +1001,61 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0x96340307, 0x442f, 0x4327, 0x8fd0, 0xcbb71d95bf8a>
 		>
 	{
-		use<IFsRequest> Close(use<ILoop>, FileOsType, use<FsCallback>);
+		use<IFsRequest> CloseRaw(use<ILoop>, FileOsType, use<FsCallback>);
 
-		use<IFsRequest> Open(use<ILoop>, cr_string, int flags,
+		use<IFsRequest> OpenRaw(use<ILoop>, cr_string, int flags,
 			int mode, use<FsCallback>);
 
-		use<IFsRequest> Read(use<ILoop>, FileOsType file, void* buf,
+		use<IFsRequest> ReadRaw(use<ILoop>, FileOsType file, void* buf,
 			std::size_t length, std::int64_t offset, use<FsCallback>);
 
-		use<IFsRequest> Unlink(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> UnlinkRaw(use<ILoop>, cr_string path, use<FsCallback>);
 
-		use<IFsRequest> Write(use<ILoop>, FileOsType file, const void* buf,
+		use<IFsRequest> WriteRaw(use<ILoop>, FileOsType file, const void* buf,
 			std::size_t length, std::int64_t offset, use<FsCallback>);
 
-		use<IFsRequest> Mkdir(use<ILoop>, cr_string path, int mode, use<FsCallback>);
-		use<IFsRequest> Rmdir(use<ILoop>, cr_string, use<FsCallback>);
+		use<IFsRequest> MkdirRaw(use<ILoop>, cr_string path, int mode, use<FsCallback>);
+		use<IFsRequest> RmdirRaw(use<ILoop>, cr_string, use<FsCallback>);
 
-		use<IFsRequest> Readdir( use<ILoop>, cr_string path, int flags, use<FsCallback>);
-		use<IFsRequest> Stat(use<ILoop>, cr_string path, use<FsCallback>);
-		use<IFsRequest> Fstat(use<ILoop>, FileOsType file, use<FsCallback>);
-		use<IFsRequest> Rename(use<ILoop>, cr_string path,cr_string new_path, use<FsCallback>);
-		use<IFsRequest> Fsync(use<ILoop>, FileOsType file, use<FsCallback>);
-		use<IFsRequest> Fdatasync(use<ILoop>, FileOsType file, use<FsCallback>);
-		use<IFsRequest> Ftruncate(use<ILoop>, FileOsType file, 
+		use<IFsRequest> ReaddirRaw( use<ILoop>, cr_string path, int flags, use<FsCallback>);
+		use<IFsRequest> StatRaw(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> FstatRaw(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> RenameRaw(use<ILoop>, cr_string path,cr_string new_path, use<FsCallback>);
+		use<IFsRequest> FsyncRaw(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> FdatasyncRaw(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> FtruncateRaw(use<ILoop>, FileOsType file, 
 			std::int64_t offset, use<FsCallback>);
-		use<IFsRequest> Sendfile(use<ILoop>, FileOsType file_out, FileOsType file_in,
+		use<IFsRequest> SendfileRaw(use<ILoop>, FileOsType file_out, FileOsType file_in,
 			std::int64_t in_offset, std::size_t length, use<FsCallback>);
-		use<IFsRequest> Chmod(use<ILoop>, cr_string path,
+		use<IFsRequest> ChmodRaw(use<ILoop>, cr_string path,
 			int mode, use<FsCallback>);
-		use<IFsRequest> Utime(use<ILoop>, cr_string path, double atime,
+		use<IFsRequest> UtimeRaw(use<ILoop>, cr_string path, double atime,
 			double mtime, use<FsCallback>);
-		use<IFsRequest> Futime(use<ILoop>, FileOsType file, double atime,
+		use<IFsRequest> FutimeRaw(use<ILoop>, FileOsType file, double atime,
 			double mtime, use<FsCallback>);
-		use<IFsRequest> Lstat(use<ILoop>, cr_string path, use<FsCallback>);
-		use<IFsRequest> Link(use<ILoop>, cr_string path, cr_string new_path,
+		use<IFsRequest> LstatRaw(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> LinkRaw(use<ILoop>, cr_string path, cr_string new_path,
 			use<FsCallback>);
 
-		use<IFsRequest> Symlink(use<ILoop>, cr_string path,
+		use<IFsRequest> SymlinkRaw(use<ILoop>, cr_string path,
 			cr_string new_path, int flags, use<FsCallback>);
-		use<IFsRequest> Readlink(use<ILoop>, cr_string path,
+		use<IFsRequest> ReadlinkRaw(use<ILoop>, cr_string path,
 			cr_string new_path, int flags, use<FsCallback>);
 
-		use<IFsRequest> Fchmod(use<ILoop>, FileOsType file,
+		use<IFsRequest> FchmodRaw(use<ILoop>, FileOsType file,
 			int mode, use<FsCallback>);
 
-		use<IFsRequest> Chown(use<ILoop>, cr_string path, unsigned char uid,
+		use<IFsRequest> ChownRaw(use<ILoop>, cr_string path, unsigned char uid,
 			unsigned char gid, use<FsCallback>);
 
-		use<IFsRequest> Fchown(use<ILoop>, FileOsType, unsigned char uid,
+		use<IFsRequest> FchownRaw(use<ILoop>, FileOsType, unsigned char uid,
 			unsigned char gid, use<FsCallback>);
 
 
 		CPPCOMPONENTS_CONSTRUCT(IFsRawStatics,
-			Close, Open, Read, Unlink, Write, Mkdir, Rmdir, Readdir, Stat, FStat,
-			Rename, Fsync, Fdatasync, Ftruncate, Sendfile, Chmod, Utime, Futime,
-			Lstat, Link, Symlink, Readlink, Fchmod, Chown, Fchown);
+			CloseRaw, OpenRaw, ReadRaw, UnlinkRaw, WriteRaw, MkdirRaw, RmdirRaw, ReaddirRaw, StatRaw, FStatRaw,
+			RenameRaw, FsyncRaw, FdatasyncRaw, FtruncateRaw, SendfileRaw, ChmodRaw, UtimeRaw, FutimeRaw,
+			LstatRaw, LinkRaw, SymlinkRaw, ReadlinkRaw, FchmodRaw, ChownRaw, FchownRaw);
 
 
 	};
@@ -1016,9 +1069,9 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xff330521, 0x0c3e, 0x4c7b, 0x85fd, 0x7cfef3e71cb4 >>
 	{
-		void Start(use<PollCallback>, cr_string path, unsigned int msinterval);
+		void StartRaw(use<PollCallback>, cr_string path, unsigned int msinterval);
 		void Stop();
-		CPPCOMPONENTS_CONSTRUCT(IFsPoll, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(IFsPoll, StartRaw, Stop);
 	};
 
 	struct IFsPollFactory
@@ -1040,9 +1093,9 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xce633c27, 0xa8cb, 0x4752, 0xa7b9, 0x119924d606f0 >>
 	{
-		void Start(use<SignalCallback>, int signum );
+		void StartRaw(use<SignalCallback>, int signum );
 		void Stop();
-		CPPCOMPONENTS_CONSTRUCT(ISignal, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(ISignal, StartRaw, Stop);
 	};
 
 	struct ISignalFactory
@@ -1085,7 +1138,7 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid < 0x5d6a475c, 0x82ab, 0x4ea1, 0xb564, 0xcf73b487e567 >>
 	{
 		void Lock();
-		int Trylock();
+		bool Trylock();
 		void Unlock();
 		void* UvHandle();
 
@@ -1112,10 +1165,10 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid < 0x3e547e44, 0xda43, 0x4457, 0xaee2, 0xb985f1ee436e >>
 	{
 		void Rdlock();
-		int Tryrdlock();
+		bool Tryrdlock();
 		void Rdunlock();
 		void Wrlock();
-		int Trywrlock();
+		bool Trywrlock();
 		void Wrunlock();
 
 
@@ -1142,7 +1195,7 @@ namespace cppcomponents_libuv{
 	{
 		void Post();
 		void Wait();
-		int Trywait();
+		bool Trywait();
 
 		// Calls destroy in destructor
 		CPPCOMPONENTS_CONSTRUCT(ISemaphore, Lock, Trylock, Unlock);
@@ -1167,7 +1220,7 @@ namespace cppcomponents_libuv{
 		void Signal();
 		void Broadcast();
 		void Wait(use<IMutex>);
-		int Timedwait(use<IMutex>, std::uint64_t timeout);
+		bool Timedwait(use<IMutex>, std::uint64_t timeout);
 
 		// Calls destroy in destructor
 		CPPCOMPONENTS_CONSTRUCT(IConditionVariable, Signal,Broadcast,
