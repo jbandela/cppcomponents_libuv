@@ -752,7 +752,9 @@ namespace cppcomponents_libuv{
 	{
 		void Send();
 
-		CPPCOMPONENTS_CONSTRUCT(IAsync,Send);
+		void Destroy();
+
+		CPPCOMPONENTS_CONSTRUCT(IAsync,Send,Destroy);
 	};
 	struct IAsyncFactory
 		: public cppcomponents::define_interface <

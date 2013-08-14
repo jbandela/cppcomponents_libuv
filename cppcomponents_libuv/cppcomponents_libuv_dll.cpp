@@ -1257,3 +1257,50 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 
 };
 
+struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class<ImpAsync, Async_t>
+{
+	typedef ImpHandleBase<uv_async_t> imp_base_t;
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	use<IAsync> async_self_;
+	use<AsyncCallback> callback_;
+
+	static void AsyncCallbackRaw(uv_async_t* handle, int status){
+		auto& imp = *static_cast<ImpAsync*>(handle);
+		imp.callback_(imp.QueryInterface<IAsync>(), status);
+	}
+
+
+	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),callback_(cb),
+		async_self_(this->QueryInterface<IAsync>())
+	{
+		throw_if_error(uv_async_init(as_uv_type(loop), this,AsyncCallbackRaw));
+	}
+
+
+
+	void Send(){
+		throw_if_error(uv_async_send(this));
+	}
+
+	void Destroy(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+		async_self_ = nullptr;
+	}
+
+
+	// The destructor is compiler generated
+	// Not destructor does not call close
+	// This is because Async may be used on other threads
+	// And close is not thread safe
+
+};
