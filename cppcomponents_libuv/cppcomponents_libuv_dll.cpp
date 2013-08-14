@@ -992,7 +992,7 @@ struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement
 };
 
 
-struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t, ImpPipe>, implement_runtime_class<ImpPipe, Pipe_t>
+struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_class<ImpPipe, Pipe_t>
 {
 	typedef ImpStreamBase<uv_pipe_t, ImpPipe> imp_base_t;
 	using imp_base_t::HandleType;
@@ -1048,9 +1048,9 @@ struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t, ImpPipe>, implement_runtime
 	}
 };
 
-struct ImpPoll : uv_poll_t, ImpStreamBase<uv_poll_t, ImpPoll>, implement_runtime_class<ImpPoll, Poll_t>
+struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<ImpPoll, Poll_t>
 {
-	typedef ImpStreamBase<uv_poll_t, ImpPoll> imp_base_t;
+	typedef ImpHandleBase<uv_poll_t> imp_base_t;
 	using imp_base_t::HandleType;
 	using imp_base_t::IsActive;
 	using imp_base_t::CloseRaw;
@@ -1059,19 +1059,6 @@ struct ImpPoll : uv_poll_t, ImpStreamBase<uv_poll_t, ImpPoll>, implement_runtime
 	using imp_base_t::HasRef;
 	using imp_base_t::IsClosing;
 	using imp_base_t::UvHandle;
-
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 	use<IPoll> poll_self_;
 
@@ -1114,9 +1101,9 @@ struct ImpPoll : uv_poll_t, ImpStreamBase<uv_poll_t, ImpPoll>, implement_runtime
 	
 };
 
-struct ImpPrepare : uv_prepare_t, ImpStreamBase<uv_prepare_t, ImpPrepare>, implement_runtime_class<ImpPrepare, Prepare_t>
+struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime_class<ImpPrepare, Prepare_t>
 {
-	typedef ImpStreamBase<uv_prepare_t, ImpPrepare> imp_base_t;
+	typedef ImpHandleBase<uv_prepare_t> imp_base_t;
 	using imp_base_t::HandleType;
 	using imp_base_t::IsActive;
 	using imp_base_t::CloseRaw;
@@ -1126,18 +1113,6 @@ struct ImpPrepare : uv_prepare_t, ImpStreamBase<uv_prepare_t, ImpPrepare>, imple
 	using imp_base_t::IsClosing;
 	using imp_base_t::UvHandle;
 
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 	use<IPrepare> prepare_self_;
 
@@ -1179,9 +1154,9 @@ struct ImpPrepare : uv_prepare_t, ImpStreamBase<uv_prepare_t, ImpPrepare>, imple
 
 };
 
-struct ImpCheck : uv_check_t, ImpStreamBase<uv_check_t, ImpCheck>, implement_runtime_class<ImpCheck, Check_t>
+struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class<ImpCheck, Check_t>
 {
-	typedef ImpStreamBase<uv_check_t, ImpCheck> imp_base_t;
+	typedef ImpHandleBase<uv_check_t> imp_base_t;
 	using imp_base_t::HandleType;
 	using imp_base_t::IsActive;
 	using imp_base_t::CloseRaw;
@@ -1190,19 +1165,6 @@ struct ImpCheck : uv_check_t, ImpStreamBase<uv_check_t, ImpCheck>, implement_run
 	using imp_base_t::HasRef;
 	using imp_base_t::IsClosing;
 	using imp_base_t::UvHandle;
-
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 	use<ICheck> check_self_;
 
@@ -1244,9 +1206,9 @@ struct ImpCheck : uv_check_t, ImpStreamBase<uv_check_t, ImpCheck>, implement_run
 };
 
 
-struct ImpIdle : uv_idle_t, ImpStreamBase<uv_idle_t, ImpIdle>, implement_runtime_class<ImpIdle, Idle_t>
+struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<ImpIdle, Idle_t>
 {
-	typedef ImpStreamBase<uv_idle_t, ImpIdle> imp_base_t;
+	typedef ImpHandleBase<uv_idle_t> imp_base_t;
 	using imp_base_t::HandleType;
 	using imp_base_t::IsActive;
 	using imp_base_t::CloseRaw;
@@ -1255,19 +1217,6 @@ struct ImpIdle : uv_idle_t, ImpStreamBase<uv_idle_t, ImpIdle>, implement_runtime
 	using imp_base_t::HasRef;
 	using imp_base_t::IsClosing;
 	using imp_base_t::UvHandle;
-
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 	use<IIdle> idle_self_;
 
