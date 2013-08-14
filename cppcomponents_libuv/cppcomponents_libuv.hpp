@@ -237,8 +237,8 @@ namespace cppcomponents_libuv{
 	struct ILoop ;
 	struct IHandle ;
 	struct IStream ;
-	struct ITcp ;
-	struct IUdp ;
+	struct ITcpStream ;
+	struct IUdpStream ;
 	struct IPipe ;
 	struct ITty ;
 	struct IPoll ;
@@ -351,7 +351,7 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0x5f2d1356, 0x7025, 0x4459, 0xb843, 0x9610a57f79be>
 	> UdpSendCallback;
 
-	typedef cppcomponents::delegate < void (use<IUdp>, std::ptrdiff_t nread,
+	typedef cppcomponents::delegate < void (use<IUdpStream>, std::ptrdiff_t nread,
 		Buffer buf, sockaddr* addr, unsigned int flags),
 		cppcomponents::uuid<0x62a0f712, 0x99f5, 0x4a09, 0x9d00, 0x2ec1b2dd6cea>
 	> UdpRecvCallback;
@@ -514,13 +514,13 @@ namespace cppcomponents_libuv{
 	{
 		use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback>);
 		void ListenRaw(int backlog, cppcomponents::use<ConnectionCallback>);
-		use<IStream> Accept();
+		void Accept(use<IStream> client);
 
 		void ReadStartRaw(cppcomponents::use<ReadCallback>);
 		void ReadStop();
 		void Read2StartRaw(cppcomponents::use<Read2Callback>);
-		void WriteRaw(Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
-		void Write2Raw(Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
+		use<IWriteRequest> WriteRaw(Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
+		use<IWriteRequest> Write2Raw(Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
 		bool IsReadable();
 		bool IsWritable();
 		void SetBlocking(bool blocking);
@@ -545,26 +545,26 @@ namespace cppcomponents_libuv{
 		void SimultaneousAccepts(bool enable);
 		void Bind(sockaddr_in);
 		void Bind6(sockaddr_in6);
-		void GetSockName(sockaddr* name, int* namelen);
-		void GetPeerName(sockaddr* name, int namelen);
+		void GetsocknameRaw(sockaddr* name, int* namelen);
+		void GetpeernameRaw(sockaddr* name, int* namelen);
 		use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback>);
 		use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
 
 		CPPCOMPONENTS_CONSTRUCT(ITcpStream, Open,NoDelay,KeepAlive,SimultaneousAccepts,
-			Bind,Bind6,GetSockName,GetPeerName,ConnectRaw,Connect6Raw);
+			Bind,Bind6,GetsocknameRaw,GetpeernameRaw,ConnectRaw,Connect6Raw);
 	};
 
-	struct ITcpStreamFactory
+	struct ILoopInitFactory
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid
 		<0x83be8a93 , 0x5883 , 0x4961 , 0xb885 , 0xab20a4b93919>>
 	{
-		cppcomponents::use<cppcomponents::InterfaceUnknown> TcpInit(cppcomponents::use<ILoop>);
+		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>);
 
-		CPPCOMPONENTS_CONSTRUCT(ITcpStreamFactory, TcpInit);
+		CPPCOMPONENTS_CONSTRUCT(ILoopInitFactory, Init);
 	};
 	inline std::string TcpStreamId(){return "cppcomponents_lib_uv_dll!TcpStream";}
-	typedef runtime_class<TcpStreamId, object_interfaces<ITcpStream>, factory_interface<ITcpStreamFactory>> TcpStream_t;
+	typedef runtime_class<TcpStreamId, object_interfaces<ITcpStream>, factory_interface<ILoopInitFactory>> TcpStream_t;
 	typedef use_runtime_class<TcpStream_t> TcpStream;
 	
 
@@ -574,9 +574,9 @@ namespace cppcomponents_libuv{
 		> , IStream >
 	{
 		void Open(SocketOsType sock);
-		void Bind(sockaddr_in);
-		void Bind6(sockaddr_in6);
-		void GetSockName(sockaddr* name, int* namelen);
+		void Bind(sockaddr_in in, std::uint32_t flags);
+		void Bind6(sockaddr_in6 in, std::uint32_t flags);
+		void GetSocknameRaw(sockaddr* name, int* namelen);
 		void SetMembership(cppcomponents::cr_string multicast_addr, cppcomponents::cr_string interface_addr,
 			std::uint32_t membership);
 		void SetMulticastLoop(bool on);
@@ -588,24 +588,16 @@ namespace cppcomponents_libuv{
 		use<IUdpSendRequest> Send6Raw(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
 			cppcomponents::use<UdpSendCallback> send_cb);
 
-		void RecvStartRaw(cppcomponents::use<AllocCallback>, cppcomponents::use<UdpRecvCallback>);
+		void RecvStartRaw(cppcomponents::use<UdpRecvCallback>);
 		void RecvStop();
 
-		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,Bind,Bind6,GetSockName,SetMembership,
+		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,Bind,Bind6,GetSocknameRaw,SetMembership,
 			SetMulticastLoop,SetMulticastTtl,SetBroadcast,SetTtl,SendRaw,Send6Raw,RecvStartRaw,RecvStop);
 	};
 
-	struct IUdpStreamFactory
-		: public cppcomponents::define_interface <
-		cppcomponents::uuid
-		< 0xc8f22d60 , 0xefa2 , 0x4d63 , 0xa6fc , 0x66d705f77352		>>
-	{
-		cppcomponents::use<cppcomponents::InterfaceUnknown> UdpInit(cppcomponents::use<ILoop>);
 
-		CPPCOMPONENTS_CONSTRUCT(IUdpStreamFactory, UdpInit);
-	};
 	inline std::string UdpStreamId(){ return "cppcomponents_lib_uv_dll!UdpStream"; }
-	typedef runtime_class<UdpStreamId, object_interfaces<IUdpStream>, factory_interface<IUdpStreamFactory>> UdpStream_t;
+	typedef runtime_class<UdpStreamId, object_interfaces<IUdpStream>, factory_interface<ILoopInitFactory>> UdpStream_t;
 	typedef use_runtime_class<UdpStream_t> UdpStream;
 
 
@@ -615,10 +607,9 @@ namespace cppcomponents_libuv{
 		IStream > 
 	{
 		void SetMode(int mode);
-		void ResetMode();
 		std::pair<int,int> GetWinsize();
 
-		CPPCOMPONENTS_CONSTRUCT(IPipe, SetMode, ResetMode, GetWinsize);
+		CPPCOMPONENTS_CONSTRUCT(ITty, SetMode, GetWinsize);
 		
 	};
 
@@ -633,8 +624,18 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(ITtyFactory, Init);
 	};
 
+	struct ITtyStatics
+		: public cppcomponents::define_interface <
+		cppcomponents::uuid < 0x3fe4f6da, 0xd38d, 0x46cb, 0x867c, 0x4e4537cb0be0 >>
+	{
+		void ResetMode();
+
+		CPPCOMPONENTS_CONSTRUCT(ITtyStatics, ResetMode);
+	};
+
 	inline std::string TtyId(){ return "cppcomponents_lib_uv_dll!Tty"; }
-	typedef runtime_class<TtyId, object_interfaces<ITty>, factory_interface<ITtyFactory>> Tty_t;
+	typedef runtime_class<TtyId, object_interfaces<ITty>, factory_interface<ITtyFactory>,
+	static_interfaces<ITtyStatics>> Tty_t;
 	typedef use_runtime_class<Tty_t> Tty;
 
 	struct IPipe
@@ -706,10 +707,10 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IPrepare, StartRaw, Stop);
 	};
 
-	// DefaultFactory works for IPrepare Init
+
 
 	inline std::string PrepareId(){ return "cppcomponents_lib_uv_dll!Prepare"; }
-	typedef runtime_class<PrepareId, object_interfaces<IPrepare>> Prepare_t;
+	typedef runtime_class < PrepareId, object_interfaces<IPrepare>, factory_interface<ILoopInitFactory>> Prepare_t;
 	typedef use_runtime_class<Prepare_t> Prepare;
 
 	
@@ -725,7 +726,7 @@ namespace cppcomponents_libuv{
 	};
 
 	inline std::string CheckId(){ return "cppcomponents_lib_uv_dll!Check"; }
-	typedef runtime_class<CheckId, object_interfaces<ICheck>> Check_t;
+	typedef runtime_class<CheckId, object_interfaces<ICheck>, factory_interface<ILoopInitFactory>> Check_t;
 	typedef use_runtime_class<Check_t> Check;
 
 
@@ -741,7 +742,7 @@ namespace cppcomponents_libuv{
 	};	
 
 	inline std::string IdleId(){ return "cppcomponents_lib_uv_dll!Idle"; }
-	typedef runtime_class<IdleId, object_interfaces<IIdle>> Idle_t;
+	typedef runtime_class<IdleId, object_interfaces<IIdle>, factory_interface<ILoopInitFactory>> Idle_t;
 	typedef use_runtime_class<Idle_t> Idle;
 
 	struct IAsync

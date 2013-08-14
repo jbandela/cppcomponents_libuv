@@ -20,6 +20,30 @@ inline std::string dummyid(){
 //struct IWorkRequest;
 
 
+uv_loop_t* as_uv_type(use<ILoop> loop){
+	return static_cast<uv_loop_t*>(loop.UvHandle());
+}
+uv_work_t* as_uv_type(use<IWorkRequest> w){
+		return static_cast<uv_work_t*>(w.UvHandle());
+}
+uv_stream_t* as_uv_type(use<clv::IStream> s){
+	return static_cast<uv_stream_t*>(s.UvHandle());
+}
+uv_buf_t* as_uv_type(Buffer* b){
+	return reinterpret_cast<uv_buf_t*>(b);
+}
+uv_connect_t* as_uv_type(use<IConnectRequest> c){
+	return static_cast<uv_connect_t*>(c.UvHandle());
+}
+
+uv_udp_send_t* as_uv_type(use<IUdpSendRequest> r){
+	return static_cast<uv_udp_send_t*>(r.UvHandle());
+}
+uv_write_t* as_uv_type(use<IWriteRequest> r){
+	return static_cast<uv_write_t*>(r.UvHandle());
+}
+
+
 typedef runtime_class<dummyid, object_interfaces<IGetAddrinfoRequest>> GetAddrinfoRequest_t;
 typedef runtime_class<dummyid, object_interfaces<IShutdownRequest>> ShutdownRequest_t;
 typedef runtime_class<dummyid, object_interfaces<IWriteRequest>> WriteRequest_t;
@@ -423,6 +447,8 @@ struct ImpHandleBase{
 		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
 	}
 
+	bool closed(){ return closed_; }
+
 	void CloseRaw(use<CloseCallback> cb){
 		closed_ = true;
 		handle_->data = delegate_to_void(cb);
@@ -539,7 +565,7 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 
 	use<IWorkRequest> QueueWorkRaw(use<WorkCallback> wcb, use<AfterWorkCallback> awcb){
 		auto wr = ImpWorkRequest::create(wcb, awcb, this->QueryInterface<ILoop>()).QueryInterface<IWorkRequest>();
-		uv_queue_work(loop_, reinterpret_cast<uv_work_t*>(wr.UvHandle()),ImpWorkRequest::RequestCb,ImpWorkRequest::AfterRequestCb);
+		uv_queue_work(loop_, as_uv_type(wr),ImpWorkRequest::RequestCb,ImpWorkRequest::AfterRequestCb);
 		return wr;
 	}
 
@@ -557,7 +583,7 @@ uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
 	}
 }
 
-template<class HType,class Derived,class NonOwning = ImpStreamNonOwning>
+template<class HType,class Derived>
 struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	using ImpHandleBase<uv_stream_t>::HandleType;
 	using ImpHandleBase<uv_stream_t>::IsActive;
@@ -565,13 +591,16 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	using ImpHandleBase<uv_stream_t>::Ref;
 	using ImpHandleBase<uv_stream_t>::Unref;
 	using ImpHandleBase<uv_stream_t>::HasRef;
+	using ImpHandleBase<uv_stream_t>::IsClosing;
 	using ImpHandleBase<uv_stream_t>::UvHandle;
 
 	typedef cppcomponents::delegate < void(int) > ConnectionCallbackHelper;
 	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf) > ReadCallbackHelper;
 	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf, int pending) > Read2CallbackHelper;
 
-	use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback> cb){
+	use<clv::IStream> istream_self_;
+
+	use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		return ImpShutdownRequest::create(cb, is).QueryInterface<IShutdownRequest>();
 	}
@@ -582,7 +611,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		cb(status);
 	}
 
-	void Listen(int backlog, use<ConnectCallback> cb){
+	void ListenRaw(int backlog, use<ConnectionCallback> cb){
 
 		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		auto cbh = make_delegate<ConnectionCallbackHelper>([is,cb](int status){
@@ -592,10 +621,8 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		throw_if_error(uv_listen(this->get(), backlog, ConnectionCallbackRaw));
 	}
 
-	use<clv::IStream> Accept(){
-		auto is = Derived::create().QueryInterface<clv::IStream>();
-		uv_accept(get(), reinterpret_cast<uv_stream_t*>(is.UvHandle()));
-		return is;
+	void Accept(use<clv::IStream> client){
+		throw_if_error(uv_accept(get(), as_uv_type(client)));
 	}
 
 	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
@@ -609,19 +636,27 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		delete buf.base;
 	}
 
-	void ReadStart(use<ReadCallback> cb){
+	void ReadStartRaw(use<ReadCallback> cb){
 		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		auto cbh = make_delegate<ReadCallbackHelper>([is, cb](std::ptrdiff_t nread, Buffer buf){
 			cb(is, nread, buf);
 		});
-		this->handle_.data = delegate_to_void(cbh);
-		uv_read_start(this->get(), AllocCallbackRaw, ReadCallbackRaw);
+		this->handle_->data = delegate_to_void(cbh);
+		istream_self_ = is;
+		try{
+		throw_if_error(uv_read_start(this->get(), AllocCallbackRaw, ReadCallbackRaw));
+		}
+		catch (...){
+			istream_self_ = nullptr;
+		}
 
 	}
 
 	void ReadStop(){
+		istream_self_ = nullptr;
 		uv_read_stop(this->get());
 	}
+	/*
 	static void Read2CallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf,int pending){
 		Buffer b;
 		b.base = buf.base;
@@ -632,34 +667,53 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 		delete buf.base;
 	}
-	void Read2Start(use<Read2Callback> cb){
-		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
+	*/
+
+	// Can't figure out how to use uv_read2_start
+	// Plan on implentation after more research
+	void Read2StartRaw(use<Read2Callback> cb){
+		throw error_not_implemented();
+
+	/*	auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		auto cbh = make_delegate<Read2CallbackHelper>([is, cb](std::ptrdiff_t nread, Buffer buf,int pending){
 			cb(is, nread, buf,pending);
 		});
-		this->handle_.data = delegate_to_void(cbh);
-		uv_read_start(this->get(), AllocCallbackRaw, Read2CallbackRaw);
-
+		this->handle_->data = delegate_to_void(cbh);
+	
+		istream_self_ = is;
+		try{
+			throw_if_error(uv_read2_start(this->get(), AllocCallbackRaw, Read2CallbackRaw));
+		}
+		catch (...){
+			istream_self_ = nullptr;
+		}
+		*/
 	}
 
 	void Read2Stop(){
-		uv_read_stop(this->get());
+		throw error_not_implemented();
+		/*
+		istream_self_ = nullptr;
 
+		uv_read_stop(this->get());
+		*/
 	}
 
-	use<IWriteRequest> Write(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
+	use<IWriteRequest> WriteRaw(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
 		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
-		auto wr = ImpWriteRequest::create(cb, this->QueryInterface<clv::IStream>());
-		throw_if_error(uv_write(static_cast<uv_write_t*>(wr.UvHandle()), this->get(), reinterpret_cast<uv_buf_t*>(bufs), bufcnt,
+		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->QueryInterface<clv::IStream>()).QueryInterface<IWriteRequest>();
+		throw_if_error(uv_write(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
 			ImpWriteRequest::RequestCb));
 
-	}	
-	use<IWriteRequest> Write2(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
-		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
-		auto wr = ImpWriteRequest::create(cb, this->QueryInterface<clv::IStream>());
-		throw_if_error(uv_write2(static_cast<uv_write_t*>(wr.UvHandle()), this->get(), reinterpret_cast<uv_buf_t*>(bufs), bufcnt,
-			static_cast<uv_stream_t*>(is.UvHandle()),ImpWriteRequest::RequestCb));
+		return wr;
 
+	}	
+	use<IWriteRequest> Write2Raw(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
+		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
+		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->QueryInterface<clv::IStream>()).QueryInterface<IWriteRequest>();;
+		throw_if_error(uv_write2(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
+			as_uv_type(is),ImpWriteRequest::RequestCb));
+		return wr;
 	}
 
 	bool IsReadable(){
@@ -671,8 +725,586 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	}
 
 	void SetBlocking(bool blocking){
-		uv_stream_set_blocking(this->get(), blocking ? 1 : 0);
+		uv_stream_set_blocking(this->get(), blocking);
+	}
+
+	ImpStreamBase(HType* h) : ImpHandleBase(reinterpret_cast<uv_stream_t*>(h)){}
+
+
+
+};
+
+
+struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_runtime_class<ImpTcpStream, TcpStream_t>{
+
+	typedef ImpStreamBase<uv_tcp_t, ImpTcpStream> imp_base_t;
+
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+	ImpTcpStream(use<ILoop> loop) : imp_base_t(this){
+		throw_if_error(uv_tcp_init(as_uv_type(loop), this));
+	}
+
+	void Open(SocketOsType sock){
+		throw_if_error(uv_tcp_open(this, static_cast<uv_os_sock_t>(sock)));
+	}
+
+	void NoDelay(bool enable){
+		throw_if_error(uv_tcp_nodelay(this, enable));
+	}
+
+	void KeepAlive(bool enable, std::uint32_t delay){
+		throw_if_error(uv_tcp_keepalive(this, enable, delay));
+	}
+
+	void SimultaneousAccepts(bool enable){
+		throw_if_error(uv_tcp_simultaneous_accepts(this, enable));
+	}
+
+	void Bind(sockaddr_in in){
+		throw_if_error(uv_tcp_bind(this, in));
+	}
+
+	void Bind6(sockaddr_in6 in6){
+		throw_if_error(uv_tcp_bind6(this, in6));
+	}
+
+	void GetsocknameRaw(sockaddr* name, int* namelen){
+		
+		throw_if_error(uv_tcp_getsockname(this, name, namelen));
+	}
+
+	void GetpeernameRaw(sockaddr* name, int* namelen){
+		throw_if_error(uv_tcp_getpeername(this, name, namelen));
+	}
+
+	use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback> cb){
+		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
+		throw_if_error(uv_tcp_connect(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
+		return cr;
+	}
+	use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback> cb){
+		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
+		throw_if_error(uv_tcp_connect6(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
+		return cr;
+	}
+
+	~ImpTcpStream(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+};
+
+struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement_runtime_class<ImpUdpStream, UdpStream_t>
+{
+	typedef ImpStreamBase<uv_udp_t, ImpUdpStream> imp_base_t;
+
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+	// This keeps us alive during async requests
+	use<IUdpStream> self_;
+
+	ImpUdpStream(use<ILoop> loop) : imp_base_t(this){
+		throw_if_error(uv_udp_init(as_uv_type(loop), this));
+	}
+
+
+	void Open(SocketOsType sock){
+		throw_if_error(uv_udp_open(this, static_cast<uv_os_sock_t>(sock)));
+	}
+	void Bind(sockaddr_in in, std::uint32_t flags){
+		throw_if_error(uv_udp_bind(this, in, flags));
+	}
+	void Bind6(sockaddr_in6 in, std::uint32_t flags){
+		throw_if_error(uv_udp_bind6(this, in, flags));
+	}
+	void GetSocknameRaw(sockaddr* name, int* namelen){
+		throw_if_error(uv_udp_getsockname(this, name, namelen));
+	}
+	void SetMembership(cppcomponents::cr_string multicast_addr, cppcomponents::cr_string interface_addr,
+		std::uint32_t membership){
+			throw_if_error(uv_udp_set_membership(this, multicast_addr.data(), interface_addr.data(), 
+				membership==UV_LEAVE_GROUP?UV_LEAVE_GROUP:UV_JOIN_GROUP));
+
+	}
+	void SetMulticastLoop(bool on){
+		throw_if_error(uv_udp_set_multicast_loop(this, on));
+	}
+	void SetMulticastTtl(std::int32_t ttl){
+		throw_if_error(uv_udp_set_multicast_ttl(this, ttl));
+	}
+	void SetBroadcast(bool on){
+		throw_if_error(uv_udp_set_broadcast(this,on));
+	}
+	void SetTtl(std::int32_t ttl){
+		throw_if_error(uv_udp_set_ttl(this, ttl));
+	}
+	use<IUdpSendRequest> SendRaw(Buffer* bufs, int buffcnt, sockaddr_in addr,
+		cppcomponents::use<UdpSendCallback> cb){
+			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
+			throw_if_error(uv_udp_send(as_uv_type(sr), this,
+				as_uv_type(bufs),buffcnt, addr, ImpUdpSendRequest::RequestCb));
+			return sr;
+	}
+	use<IUdpSendRequest> Send6Raw(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
+		cppcomponents::use<UdpSendCallback> cb){
+			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
+			throw_if_error(uv_udp_send6(as_uv_type(sr), this,
+				as_uv_type(bufs), buffcnt, addr, ImpUdpSendRequest::RequestCb));
+			return sr;
+	}
+	static void RecvCallbackRaw(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
+	struct sockaddr* addr, unsigned flags){
+		auto& imp = *static_cast <ImpUdpStream*>(handle);
+
+		Buffer b;
+		b.base = buf.base;
+		b.len = buf.len;
+
+
+		auto cb = delegate_from_void<UdpRecvCallback>(handle->data);
+		cb(imp.self_, nread, b,addr,flags);
+
+		delete buf.base;
+	}
+
+
+	void RecvStartRaw(cppcomponents::use<UdpRecvCallback> cb){
+		this->data = delegate_to_void(cb);
+		self_ = this->QueryInterface<IUdpStream>();
+		try{
+			throw_if_error(uv_udp_recv_start(this, AllocCallbackRaw, RecvCallbackRaw));
+
+		}
+		catch (...){
+			self_ = nullptr;
+			throw;
+		}
+	}
+	void RecvStop(){
+		self_ = nullptr;
+		throw_if_error(uv_udp_recv_stop(this)); 
+	}
+	~ImpUdpStream(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+};
+
+
+struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement_runtime_class<ImpTtyStream, Tty_t>
+{
+	typedef ImpStreamBase<uv_tty_t, ImpTtyStream> imp_base_t;
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+
+	ImpTtyStream(use<ILoop> loop, FileOsType fd, bool readable)
+		: imp_base_t(this)
+	{
+		throw_if_error(uv_tty_init(as_uv_type(loop), this, fd, readable));
+	}
+
+	void SetMode(int mode){
+		throw_if_error(uv_tty_set_mode(this, mode));
+	}
+
+	std::pair<int, int> GetWinsize(){
+		std::pair<int, int> ret;
+		throw_if_error(uv_tty_get_winsize(this, &ret.first, &ret.second));
+		return ret;
+	}
+
+	static void ResetMode(){
+		uv_tty_reset_mode();
+	}
+
+	~ImpTtyStream(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
 	}
 
 
 };
+
+
+struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t, ImpPipe>, implement_runtime_class<ImpPipe, Pipe_t>
+{
+	typedef ImpStreamBase<uv_pipe_t, ImpPipe> imp_base_t;
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+
+	ImpPipe(use<ILoop> loop, bool ipc) : imp_base_t(this)
+	{
+		throw_if_error(uv_pipe_init(as_uv_type(loop), this, ipc));
+	}
+
+	void Open(FileOsType file){
+		throw_if_error(uv_pipe_open(this, file));
+	}
+
+	void Bind(cr_string name){
+		throw_if_error(uv_pipe_bind(this, name.data()));
+	}
+
+	use<IConnectRequest> ConnectRaw(cr_string name, use<ConnectCallback> cb){
+		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
+		uv_pipe_connect(as_uv_type(cr), this, name.data(), ImpConnectRequest::RequestCb);
+		return cr;
+	}
+
+	void PendingInstances(int count){
+		uv_pipe_pending_instances(this, count);
+	}
+
+	~ImpPipe(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+};
+
+struct ImpPoll : uv_poll_t, ImpStreamBase<uv_poll_t, ImpPoll>, implement_runtime_class<ImpPoll, Poll_t>
+{
+	typedef ImpStreamBase<uv_poll_t, ImpPoll> imp_base_t;
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+	use<IPoll> poll_self_;
+
+	ImpPoll(use<ILoop> loop, FileOsType file) : imp_base_t(this){
+		throw_if_error(uv_poll_init(as_uv_type(loop), this, file));
+	}
+	ImpPoll(use<ILoop> loop, SocketOsType sock) : imp_base_t(this){
+		throw_if_error(uv_poll_init_socket(as_uv_type(loop), this, static_cast<uv_os_sock_t>(sock)));
+	}
+
+	static void PollCallbackRaw(uv_poll_t* handle, int status, int events){
+		auto& imp = *static_cast<ImpPoll*>(handle);
+		auto cb = delegate_from_void<PollCallback>(handle->data);
+		cb(imp.poll_self_, status, events);
+
+	}
+
+	void StartRaw(int events, use<PollCallback> cb){
+		this->data = delegate_to_void(cb);
+		poll_self_ = this->QueryInterface<IPoll>();
+		try{
+			throw_if_error(uv_poll_start(this, events,PollCallbackRaw));
+
+		}
+		catch (...){
+			poll_self_ = nullptr;
+			throw;
+		}
+	}
+
+	void Stop(){
+		poll_self_ = nullptr;
+		throw_if_error(uv_poll_stop(this));
+	}
+	~ImpPoll(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+	
+};
+
+struct ImpPrepare : uv_prepare_t, ImpStreamBase<uv_prepare_t, ImpPrepare>, implement_runtime_class<ImpPrepare, Prepare_t>
+{
+	typedef ImpStreamBase<uv_prepare_t, ImpPrepare> imp_base_t;
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+	use<IPrepare> prepare_self_;
+
+	ImpPrepare(use<ILoop> loop) : imp_base_t(this){
+		throw_if_error(uv_prepare_init(as_uv_type(loop), this));
+	}
+
+
+	static void PrepareCallbackRaw(uv_prepare_t* handle, int status){
+		auto& imp = *static_cast<ImpPrepare*>(handle);
+		auto cb = delegate_from_void<PrepareCallback>(handle->data);
+		cb(imp.prepare_self_, status);
+
+	}
+
+	void StartRaw(use<PrepareCallback> cb){
+		this->data = delegate_to_void(cb);
+		prepare_self_ = this->QueryInterface<IPrepare>();
+		try{
+			throw_if_error(uv_prepare_start(this,  PrepareCallbackRaw));
+
+		}
+		catch (...){
+			prepare_self_ = nullptr;
+			throw;
+		}
+	}
+
+	void Stop(){
+		prepare_self_ = nullptr;
+		throw_if_error(uv_prepare_stop(this));
+	}
+
+	~ImpPrepare(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+};
+
+struct ImpCheck : uv_check_t, ImpStreamBase<uv_check_t, ImpCheck>, implement_runtime_class<ImpCheck, Check_t>
+{
+	typedef ImpStreamBase<uv_check_t, ImpCheck> imp_base_t;
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+	use<ICheck> check_self_;
+
+	ImpCheck(use<ILoop> loop) : imp_base_t(this){
+		throw_if_error(uv_check_init(as_uv_type(loop), this));
+	}
+
+
+	static void CheckCallbackRaw(uv_check_t* handle, int status){
+		auto& imp = *static_cast<ImpCheck*>(handle);
+		auto cb = delegate_from_void<CheckCallback>(handle->data);
+		cb(imp.check_self_, status);
+
+	}
+
+	void StartRaw(use<CheckCallback> cb){
+		this->data = delegate_to_void(cb);
+		check_self_ = this->QueryInterface<ICheck>();
+		try{
+			throw_if_error(uv_check_start(this, CheckCallbackRaw));
+
+		}
+		catch (...){
+			check_self_ = nullptr;
+			throw;
+		}
+	}
+
+	void Stop(){
+		check_self_ = nullptr;
+		throw_if_error(uv_check_stop(this));
+	}
+	~ImpCheck(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+};
+
+
+struct ImpIdle : uv_idle_t, ImpStreamBase<uv_idle_t, ImpIdle>, implement_runtime_class<ImpIdle, Idle_t>
+{
+	typedef ImpStreamBase<uv_idle_t, ImpIdle> imp_base_t;
+	using imp_base_t::HandleType;
+	using imp_base_t::IsActive;
+	using imp_base_t::CloseRaw;
+	using imp_base_t::Ref;
+	using imp_base_t::Unref;
+	using imp_base_t::HasRef;
+	using imp_base_t::IsClosing;
+	using imp_base_t::UvHandle;
+
+	using imp_base_t::ShutdownRaw;
+	using imp_base_t::ListenRaw;
+	using imp_base_t::Accept;
+
+	using imp_base_t::ReadStartRaw;
+	using imp_base_t::ReadStop;
+	using imp_base_t::Read2StartRaw;
+	using imp_base_t::WriteRaw;
+	using imp_base_t::Write2Raw;
+	using imp_base_t::IsReadable;
+	using imp_base_t::IsWritable;
+	using imp_base_t::SetBlocking;
+
+	use<IIdle> idle_self_;
+
+	ImpIdle(use<ILoop> loop) : imp_base_t(this){
+		throw_if_error(uv_idle_init(as_uv_type(loop), this));
+	}
+
+
+	static void IdleCallbackRaw(uv_idle_t* handle, int status){
+		auto& imp = *static_cast<ImpIdle*>(handle);
+		auto cb = delegate_from_void<IdleCallback>(handle->data);
+		cb(imp.idle_self_, status);
+
+	}
+
+	void StartRaw(use<IdleCallback> cb){
+		this->data = delegate_to_void(cb);
+		idle_self_ = this->QueryInterface<IIdle>();
+		try{
+			throw_if_error(uv_idle_start(this, IdleCallbackRaw));
+
+		}
+		catch (...){
+			idle_self_ = nullptr;
+			throw;
+		}
+	}
+
+	void Stop(){
+		idle_self_ = nullptr;
+		throw_if_error(uv_idle_stop(this));
+	}
+	~ImpIdle(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+};
+
