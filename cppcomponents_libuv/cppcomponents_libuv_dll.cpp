@@ -83,12 +83,7 @@ struct ImpGetAddrinfoRequest
 	: public ImpRequest<ImpGetAddrinfoRequest, GetAddrinfoRequest_t>
 {
 
-	using imp_t::RequestType;
-	using imp_t::Cancel;
-	using imp_t::GetData;
-	using imp_t::SetData;
-	using imp_t::UvHandle;
-
+	using ImpRequest<ImpGetAddrinfoRequest, GetAddrinfoRequest_t>::RequestType;
 
 	uv_getaddrinfo_t uv_t_;
 	use<GetAddrinfoCallback> cb_;
@@ -123,12 +118,6 @@ struct ImpGetAddrinfoRequest
 struct ImpShutdownRequest
 	: public ImpRequest<ImpShutdownRequest, ShutdownRequest_t>
 {
-
-	using imp_t::RequestType;
-	using imp_t::Cancel;
-	using imp_t::GetData;
-	using imp_t::SetData;
-	using imp_t::UvHandle;
 
 
 
@@ -166,11 +155,7 @@ struct ImpWriteRequest
 	: public ImpRequest<ImpWriteRequest, WriteRequest_t>
 {
 
-	using imp_t::RequestType;
-	using imp_t::Cancel;
-	using imp_t::GetData;
-	using imp_t::SetData;
-	using imp_t::UvHandle;
+
 
 
 
@@ -212,13 +197,6 @@ struct ImpConnectRequest
 	: public ImpRequest<ImpConnectRequest, ConnectRequest_t>
 {
 
-	using imp_t::RequestType;
-	using imp_t::Cancel;
-	using imp_t::GetData;
-	using imp_t::SetData;
-	using imp_t::UvHandle;
-
-
 	uv_connect_t uv_t_;
 	use<ConnectCallback> cb_;
 	use<IConnectRequest> self_;
@@ -254,11 +232,6 @@ struct ImpUdpSendRequest
 	: public ImpRequest<ImpUdpSendRequest, UdpSendRequest_t>
 {
 
-	using imp_t::RequestType;
-	using imp_t::Cancel;
-	using imp_t::GetData;
-	using imp_t::SetData;
-	using imp_t::UvHandle;
 
 
 	uv_udp_send_t uv_t_;
@@ -296,11 +269,6 @@ struct ImpFsRequest
 	: public ImpRequest<ImpFsRequest, FsRequest_t>
 {
 
-	using imp_t::RequestType;
-	using imp_t::Cancel;
-	using imp_t::GetData;
-	using imp_t::SetData;
-	using imp_t::UvHandle;
 
 
 	uv_fs_t uv_t_;
@@ -358,11 +326,6 @@ struct ImpWorkRequest
 	: public ImpRequest<ImpWorkRequest, WorkRequest_t>
 {
 
-	using imp_t::RequestType;
-	using imp_t::Cancel;
-	using imp_t::GetData;
-	using imp_t::SetData;
-	using imp_t::UvHandle;
 
 
 	uv_work_t uv_t_;
@@ -480,14 +443,7 @@ struct ImpHandleNonOwning :
 	ImpHandleBase<uv_handle_t>,
 	implement_runtime_class<ImpHandleNonOwning, Handle_t>{
 
-		using ImpHandleBase<uv_handle_t>::HandleType;
-		using ImpHandleBase<uv_handle_t>::IsActive;
-		using ImpHandleBase<uv_handle_t>::CloseRaw;
-		using ImpHandleBase<uv_handle_t>::IsClosing;
-		using ImpHandleBase<uv_handle_t>::Ref;
-		using ImpHandleBase<uv_handle_t>::Unref;
-		using ImpHandleBase<uv_handle_t>::HasRef;
-		using ImpHandleBase<uv_handle_t>::UvHandle;
+
 
 
 		ImpHandleNonOwning(uv_handle_t* h) : ImpHandleBase<uv_handle_t>(h)
@@ -585,14 +541,7 @@ uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
 
 template<class HType,class Derived>
 struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
-	using ImpHandleBase<uv_stream_t>::HandleType;
-	using ImpHandleBase<uv_stream_t>::IsActive;
-	using ImpHandleBase<uv_stream_t>::CloseRaw;
-	using ImpHandleBase<uv_stream_t>::Ref;
-	using ImpHandleBase<uv_stream_t>::Unref;
-	using ImpHandleBase<uv_stream_t>::HasRef;
-	using ImpHandleBase<uv_stream_t>::IsClosing;
-	using ImpHandleBase<uv_stream_t>::UvHandle;
+
 
 	typedef cppcomponents::delegate < void(int) > ConnectionCallbackHelper;
 	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf) > ReadCallbackHelper;
@@ -739,27 +688,7 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 
 	typedef ImpStreamBase<uv_tcp_t, ImpTcpStream> imp_base_t;
 
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
 
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 	ImpTcpStream(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_tcp_init(as_uv_type(loop), this));
@@ -821,27 +750,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 {
 	typedef ImpStreamBase<uv_udp_t, ImpUdpStream> imp_base_t;
 
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
 
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 	// This keeps us alive during async requests
 	use<IUdpStream> self_;
@@ -939,27 +848,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement_runtime_class<ImpTtyStream, Tty_t>
 {
 	typedef ImpStreamBase<uv_tty_t, ImpTtyStream> imp_base_t;
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
 
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 
 	ImpTtyStream(use<ILoop> loop, FileOsType fd, bool readable)
@@ -995,27 +884,7 @@ struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement
 struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_class<ImpPipe, Pipe_t>
 {
 	typedef ImpStreamBase<uv_pipe_t, ImpPipe> imp_base_t;
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
 
-	using imp_base_t::ShutdownRaw;
-	using imp_base_t::ListenRaw;
-	using imp_base_t::Accept;
-
-	using imp_base_t::ReadStartRaw;
-	using imp_base_t::ReadStop;
-	using imp_base_t::Read2StartRaw;
-	using imp_base_t::WriteRaw;
-	using imp_base_t::Write2Raw;
-	using imp_base_t::IsReadable;
-	using imp_base_t::IsWritable;
-	using imp_base_t::SetBlocking;
 
 
 	ImpPipe(use<ILoop> loop, bool ipc) : imp_base_t(this)
@@ -1051,14 +920,7 @@ struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_
 struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<ImpPoll, Poll_t>
 {
 	typedef ImpHandleBase<uv_poll_t> imp_base_t;
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
+
 
 	use<IPoll> poll_self_;
 
@@ -1104,14 +966,7 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<Im
 struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime_class<ImpPrepare, Prepare_t>
 {
 	typedef ImpHandleBase<uv_prepare_t> imp_base_t;
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
+
 
 
 	use<IPrepare> prepare_self_;
@@ -1157,14 +1012,7 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class<ImpCheck, Check_t>
 {
 	typedef ImpHandleBase<uv_check_t> imp_base_t;
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
+
 
 	use<ICheck> check_self_;
 
@@ -1209,15 +1057,6 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<ImpIdle, Idle_t>
 {
 	typedef ImpHandleBase<uv_idle_t> imp_base_t;
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
-
 	use<IIdle> idle_self_;
 
 	ImpIdle(use<ILoop> loop) : imp_base_t(this){
@@ -1260,14 +1099,10 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class<ImpAsync, Async_t>
 {
 	typedef ImpHandleBase<uv_async_t> imp_base_t;
-	using imp_base_t::HandleType;
-	using imp_base_t::IsActive;
-	using imp_base_t::CloseRaw;
-	using imp_base_t::Ref;
-	using imp_base_t::Unref;
-	using imp_base_t::HasRef;
-	using imp_base_t::IsClosing;
-	using imp_base_t::UvHandle;
+
+	// We cannot call close in another thread
+	// therefore we have an another async to help with destruction
+	uv_async_t destructor_async_;
 
 	use<IAsync> async_self_;
 	use<AsyncCallback> callback_;
@@ -1277,11 +1112,22 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 		imp.callback_(imp.QueryInterface<IAsync>(), status);
 	}
 
+	static void DestructorCallback(uv_async_t* handle, int status){
+		auto hself = static_cast<uv_handle_t*>(handle->data);
+
+		// close both handles
+		uv_close(hself, nullptr);
+		uv_close(reinterpret_cast<uv_handle_t*>(handle), nullptr);
+	}
 
 	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),callback_(cb),
 		async_self_(this->QueryInterface<IAsync>())
 	{
 		throw_if_error(uv_async_init(as_uv_type(loop), this,AsyncCallbackRaw));
+		uv_async_init(as_uv_type(loop), &destructor_async_, DestructorCallback);
+		destructor_async_.data = this;
+
+
 	}
 
 
@@ -1290,17 +1136,12 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 		throw_if_error(uv_async_send(this));
 	}
 
-	void Destroy(){
+	~ImpAsync(){
+		// Schedule the handle to be closed
 		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
+			uv_async_send(&destructor_async_);
+			
 		}
-		async_self_ = nullptr;
 	}
-
-
-	// The destructor is compiler generated
-	// Not destructor does not call close
-	// This is because Async may be used on other threads
-	// And close is not thread safe
 
 };

@@ -752,9 +752,7 @@ namespace cppcomponents_libuv{
 	{
 		void Send();
 
-		void Destroy();
-
-		CPPCOMPONENTS_CONSTRUCT(IAsync,Send,Destroy);
+		CPPCOMPONENTS_CONSTRUCT(IAsync,Send);
 	};
 	struct IAsyncFactory
 		: public cppcomponents::define_interface <
@@ -765,8 +763,6 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IAsyncFactory, Init);
 	};
 
-	// Note Async is the only Handle class that does not call Close in its destructor
-	// This is because Async can be used on other threads and Close in another thread is unsafe
 	inline std::string AsyncId(){ return "cppcomponents_lib_uv_dll!Async"; }
 	typedef runtime_class<AsyncId, object_interfaces<IAsync>, factory_interface<IAsyncFactory>> Async_t;
 	typedef use_runtime_class<Async_t> Async;

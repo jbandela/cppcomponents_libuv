@@ -60,7 +60,7 @@ std::atomic<int> work_count{ 0 };
 
 
 template<class T>
-struct work : std::enable_shared_from_this<work<T>>, ,storage_and_error<T>,work_move<work<T>, T>{
+struct work : std::enable_shared_from_this<work<T>>, storage_and_error<T>,work_move<work<T>, T>{
 	uv_work_t w_;
 	std::atomic_flag then_called_;
 	std::atomic<bool> has_then_;
