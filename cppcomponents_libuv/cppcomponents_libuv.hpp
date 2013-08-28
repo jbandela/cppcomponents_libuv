@@ -787,7 +787,7 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid <0x52b4032d , 0x2898 , 0x4a5d , 0x944c , 0x9826fa0dddeb		> >
 	{
-		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>, cppcomponents::use<TimerCallback>);
+		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>);
 
 		CPPCOMPONENTS_CONSTRUCT(ITimerFactory, Init);
 	};
@@ -813,12 +813,16 @@ namespace cppcomponents_libuv{
 
 	};
 
+	inline std::string CpuInfoId(){ return "cppcomponents_lib_uv_dll!CpuInfo"; }
+	typedef cppcomponents::runtime_class<CpuInfoId, cppcomponents::object_interfaces<ICpuInfo>>
+		CpuInfo_t;
+
 	struct IInterfaceAddress
 		: public cppcomponents::define_interface < cppcomponents::uuid < 0x58aef2f1 , 0xa1b6 , 0x4a14 , 0xa417 , 0x9f1f95fed845	>>
 	{
 		cppcomponents::cr_string GetName();
 		cppcomponents::cr_string GetPhysAddr();
-		int IsInternal();
+		bool IsInternal();
 		sockaddr_in GetAddress4();
 		sockaddr_in6 GetAddress6();
 		sockaddr_in GetNetMask4();
@@ -827,6 +831,9 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IInterfaceAddress, GetName, GetPhysAddr, IsInternal, GetAddress4, GetAddress6,
 			GetNetMask4, GetNetMask6);
 	};
+	inline std::string InterfaceAddressId(){ return "cppcomponents_lib_uv_dll!InterfaceAddress"; }
+	typedef cppcomponents::runtime_class<InterfaceAddressId, cppcomponents::object_interfaces<IInterfaceAddress>>
+		InterfaceAddress_t;
 
 	struct IUvStatics
 		: cppcomponents::define_interface < cppcomponents::uuid < 0x92979519, 0x8fe7, 0x42cf, 0x8916, 0x6e6e66b46d4a	>>
@@ -836,8 +843,8 @@ namespace cppcomponents_libuv{
 		cppcomponents::cr_string Strerror(int err);
 		cppcomponents::cr_string ErrName(int err);
 		std::size_t HandleSize(int type);
-		std::size_t ReqestSize(int type);
-		Buffer BufferInit(void* base, std::uint32_t len);
+		std::size_t ReqSize(int type);
+		Buffer BufInit(void* base, std::uint32_t len);
 		std::size_t Strlcpy(char* dst, const char* src, std::size_t size);
 		std::size_t Strlcat(char* dst, const char* src, std::size_t size);
 		int GuessHandle(FileOsType file);
@@ -849,7 +856,7 @@ namespace cppcomponents_libuv{
 
 		char** SetupArgs(int argc, char** argv);
 
-		cppcomponents::cr_string GetProcessTitle();
+		std::string GetProcessTitle();
 		void SetProcessTitle(cppcomponents::cr_string);
 		std::size_t ResidentSetMemory();
 		double Uptime();
@@ -882,7 +889,7 @@ namespace cppcomponents_libuv{
 
 
 		CPPCOMPONENTS_CONSTRUCT(IUvStatics, Version, VersionString,
-			Strerror, ErrName, HandleSize, RequestSize, BufferInit, Strlcpy, Strlcat, GuessHandle,
+			Strerror, ErrName, HandleSize, ReqSize, BufInit, Strlcpy, Strlcat, GuessHandle,
 			GetaddrinfoRaw,Freeaddrinfo,SetupArgs,GetProcessTitle,SetProcessTitle,ResidentSetMemory,Uptime,
 			CpuInfo,InterfaceAddresses,Loadavg, Ip4Addr,Ip6Addr,
 			Ip4Name, Ip6Name,InetNtop,InetPton, Exepath, Cwd,Chdir,
@@ -925,7 +932,7 @@ namespace cppcomponents_libuv{
 		cppcomponents::use<ExitCallback> GetExitCallback();
 
 		void SetFile(cppcomponents::cr_string file);
-		cppcomponents::cr_string GetFile();
+		std::string GetFile();
 
 		void SetArgs(std::vector<cppcomponents::cr_string> args);
 		std::vector<cppcomponents::cr_string> GetArgs();
@@ -934,13 +941,13 @@ namespace cppcomponents_libuv{
 		std::vector<cppcomponents::cr_string> GetEnv();
 
 		void SetCwd(cppcomponents::cr_string file);
-		cppcomponents::cr_string GetCwd();		
+		std::string GetCwd();		
 
 		unsigned int GetFlags();
 		void SetFlags(unsigned int flags);
 
-		void SetStdio(cppcomponents::use<IStdioContainer>);
-		cppcomponents::use<IStdioContainer> GetStdio();
+		void SetStdio(std::vector<cppcomponents::use<IStdioContainer>>);
+		std::vector<cppcomponents::use<IStdioContainer>> GetStdio();
 
 		void SetUid(unsigned char);
 		unsigned char GetUid();
@@ -964,7 +971,8 @@ namespace cppcomponents_libuv{
 		IHandle>
 	{
 		void Kill(int signum);
-		CPPCOMPONENTS_CONSTRUCT(IProcess, Kill);
+		int GetPid();
+		CPPCOMPONENTS_CONSTRUCT(IProcess, Kill,GetPid);
 	};
 
 	struct IProcessFactory

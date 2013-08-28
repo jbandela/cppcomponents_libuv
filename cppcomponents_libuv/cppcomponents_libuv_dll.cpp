@@ -42,6 +42,9 @@ uv_udp_send_t* as_uv_type(use<IUdpSendRequest> r){
 uv_write_t* as_uv_type(use<IWriteRequest> r){
 	return static_cast<uv_write_t*>(r.UvHandle());
 }
+uv_getaddrinfo_t* as_uv_type(use<IGetAddrinfoRequest> r){
+	return static_cast<uv_getaddrinfo_t*>(r.UvHandle());
+}
 
 
 typedef runtime_class<dummyid, object_interfaces<IGetAddrinfoRequest>> GetAddrinfoRequest_t;
@@ -368,17 +371,22 @@ struct ImpWorkRequest
 };
 
 
-template<class DelegateType>
-void* delegate_to_void(use<DelegateType> cb){
-	return cb.get_portable_base_addref();
-}
-
-template<class DelegateType>
-use<DelegateType> delegate_from_void(void* data){
-	auto pb = static_cast<portable_base*>(data);
-	use<DelegateType> cb(cppcomponents::reinterpret_portable_base<DelegateType::template Interface>(pb), false);
-	return cb;
-}
+//template<class DelegateType>
+//void* delegate_to_void(use<DelegateType> cb){
+//	return cb.get_portable_base_addref();
+//}
+//
+//inline void delate_void_cleanup(void* v){
+//	auto p = static_cast<portable_base*>(v);
+//	cross_compiler_interface::use_interface<cross_compiler_interface::InterfaceUnknown>(cross_compiler_interface::reinterpret_portable_base<cross_compiler_interface::InterfaceUnknown>(p));
+//
+//}
+//template<class DelegateType>
+//use<DelegateType> delegate_from_void(void* data){
+//	auto pb = static_cast<portable_base*>(data);
+//	use<DelegateType> cb(cppcomponents::reinterpret_portable_base<DelegateType::template Interface>(pb), true);
+//	return cb;
+//}
 
 
 typedef runtime_class<dummyid, object_interfaces<IHandle>, factory_interface<NoConstructorFactoryInterface>> Handle_t;
@@ -405,7 +413,7 @@ struct ImpHandleBase{
 	}
 
 	static void CloseCallbackRaw(uv_handle_t *h){
-		auto cb = delegate_from_void<CloseCallback>(h->data);
+		use<CloseCallback> cb(cppcomponents::reinterpret_portable_base<CloseCallback>(static_cast<portable_base*>(h->data)),false);
 		h->data = nullptr;
 		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
 	}
@@ -414,7 +422,7 @@ struct ImpHandleBase{
 
 	void CloseRaw(use<CloseCallback> cb){
 		closed_ = true;
-		handle_->data = delegate_to_void(cb);
+		handle_->data = cb.get_portable_base_addref();
 		uv_close(handle_, CloseCallbackRaw);
 	}
 
@@ -511,12 +519,13 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 	}
 
 	static void WalkCallbackRaw(uv_handle_t *h, void* arg){
-		auto cb = delegate_from_void<WalkCallback>(arg);
+		use<WalkCallback> cb(cppcomponents::reinterpret_portable_base<WalkCallback>(static_cast<portable_base*>(arg)), true);
 		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
 	}
 
 	void WalkRaw(use<WalkCallback> cb){
-		uv_walk(loop_, WalkCallbackRaw, delegate_to_void(cb));
+
+		uv_walk(loop_, WalkCallbackRaw, cb.get_portable_base());
 	}
 
 	use<IWorkRequest> QueueWorkRaw(use<WorkCallback> wcb, use<AfterWorkCallback> awcb){
@@ -548,6 +557,8 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf, int pending) > Read2CallbackHelper;
 
 	use<clv::IStream> istream_self_;
+	use<ConnectionCallbackHelper> connection_cb_;
+	use<ReadCallbackHelper> read_cb_;
 
 	use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
@@ -555,18 +566,16 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	}
 
 	static void ConnectionCallbackRaw(uv_stream_t* server, int status){
-		auto cb = delegate_from_void<ConnectionCallbackHelper>(server->data);
-		server->data = false;
-		cb(status);
+		ImpStreamBase& imp = *static_cast<Derived*>(server);
+		imp.connection_cb_(status);
 	}
 
 	void ListenRaw(int backlog, use<ConnectionCallback> cb){
-
 		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		auto cbh = make_delegate<ConnectionCallbackHelper>([is,cb](int status){
 			cb(is, status);
 		});
-		this->handle_->data = delegate_to_void(cbh);
+		connection_cb_ = cbh;
 		throw_if_error(uv_listen(this->get(), backlog, ConnectionCallbackRaw));
 	}
 
@@ -590,19 +599,21 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		auto cbh = make_delegate<ReadCallbackHelper>([is, cb](std::ptrdiff_t nread, Buffer buf){
 			cb(is, nread, buf);
 		});
-		this->handle_->data = delegate_to_void(cbh);
+		read_cb_ = cbh;
 		istream_self_ = is;
 		try{
 		throw_if_error(uv_read_start(this->get(), AllocCallbackRaw, ReadCallbackRaw));
 		}
 		catch (...){
 			istream_self_ = nullptr;
+			read_cb_ = nullptr;
 		}
 
 	}
 
 	void ReadStop(){
 		istream_self_ = nullptr;
+		read_cb_ = nullptr;
 		uv_read_stop(this->get());
 	}
 	/*
@@ -754,6 +765,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 
 	// This keeps us alive during async requests
 	use<IUdpStream> self_;
+	use<UdpRecvCallback> cb_; 
 
 	ImpUdpStream(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_udp_init(as_uv_type(loop), this));
@@ -813,15 +825,14 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 		b.len = buf.len;
 
 
-		auto cb = delegate_from_void<UdpRecvCallback>(handle->data);
-		cb(imp.self_, nread, b,addr,flags);
+		imp.cb_(imp.self_, nread, b,addr,flags);
 
 		delete buf.base;
 	}
 
 
 	void RecvStartRaw(cppcomponents::use<UdpRecvCallback> cb){
-		this->data = delegate_to_void(cb);
+		cb_ = cb;
 		self_ = this->QueryInterface<IUdpStream>();
 		try{
 			throw_if_error(uv_udp_recv_start(this, AllocCallbackRaw, RecvCallbackRaw));
@@ -829,11 +840,13 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 		}
 		catch (...){
 			self_ = nullptr;
+			cb_ = nullptr;
 			throw;
 		}
 	}
 	void RecvStop(){
 		self_ = nullptr;
+		cb_ = nullptr;
 		throw_if_error(uv_udp_recv_stop(this)); 
 	}
 	~ImpUdpStream(){
@@ -923,6 +936,7 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<Im
 
 
 	use<IPoll> poll_self_;
+	use<PollCallback> cb_; 
 
 	ImpPoll(use<ILoop> loop, FileOsType file) : imp_base_t(this){
 		throw_if_error(uv_poll_init(as_uv_type(loop), this, file));
@@ -933,13 +947,12 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<Im
 
 	static void PollCallbackRaw(uv_poll_t* handle, int status, int events){
 		auto& imp = *static_cast<ImpPoll*>(handle);
-		auto cb = delegate_from_void<PollCallback>(handle->data);
-		cb(imp.poll_self_, status, events);
+		imp.cb_(imp.poll_self_, status, events);
 
 	}
 
 	void StartRaw(int events, use<PollCallback> cb){
-		this->data = delegate_to_void(cb);
+		cb_ = cb;
 		poll_self_ = this->QueryInterface<IPoll>();
 		try{
 			throw_if_error(uv_poll_start(this, events,PollCallbackRaw));
@@ -947,12 +960,14 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<Im
 		}
 		catch (...){
 			poll_self_ = nullptr;
+			cb_ = nullptr;
 			throw;
 		}
 	}
 
 	void Stop(){
 		poll_self_ = nullptr;
+		cb_ = nullptr;
 		throw_if_error(uv_poll_stop(this));
 	}
 	~ImpPoll(){
@@ -970,6 +985,7 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 
 
 	use<IPrepare> prepare_self_;
+	use<PrepareCallback> cb_;
 
 	ImpPrepare(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_prepare_init(as_uv_type(loop), this));
@@ -978,13 +994,12 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 
 	static void PrepareCallbackRaw(uv_prepare_t* handle, int status){
 		auto& imp = *static_cast<ImpPrepare*>(handle);
-		auto cb = delegate_from_void<PrepareCallback>(handle->data);
-		cb(imp.prepare_self_, status);
+		imp.cb_(imp.prepare_self_, status);
 
 	}
 
 	void StartRaw(use<PrepareCallback> cb){
-		this->data = delegate_to_void(cb);
+		cb_ = cb;
 		prepare_self_ = this->QueryInterface<IPrepare>();
 		try{
 			throw_if_error(uv_prepare_start(this,  PrepareCallbackRaw));
@@ -992,12 +1007,14 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 		}
 		catch (...){
 			prepare_self_ = nullptr;
+			cb_ = nullptr;
 			throw;
 		}
 	}
 
 	void Stop(){
 		prepare_self_ = nullptr;
+		cb_ = nullptr;
 		throw_if_error(uv_prepare_stop(this));
 	}
 
@@ -1015,6 +1032,7 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 
 
 	use<ICheck> check_self_;
+	use<CheckCallback> cb_;
 
 	ImpCheck(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_check_init(as_uv_type(loop), this));
@@ -1023,13 +1041,12 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 
 	static void CheckCallbackRaw(uv_check_t* handle, int status){
 		auto& imp = *static_cast<ImpCheck*>(handle);
-		auto cb = delegate_from_void<CheckCallback>(handle->data);
-		cb(imp.check_self_, status);
+		imp.cb_(imp.check_self_, status);
 
 	}
 
 	void StartRaw(use<CheckCallback> cb){
-		this->data = delegate_to_void(cb);
+		cb_ = cb;
 		check_self_ = this->QueryInterface<ICheck>();
 		try{
 			throw_if_error(uv_check_start(this, CheckCallbackRaw));
@@ -1037,12 +1054,14 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 		}
 		catch (...){
 			check_self_ = nullptr;
+			cb_ = nullptr;
 			throw;
 		}
 	}
 
 	void Stop(){
 		check_self_ = nullptr;
+		cb_ = nullptr;
 		throw_if_error(uv_check_stop(this));
 	}
 	~ImpCheck(){
@@ -1058,6 +1077,7 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 {
 	typedef ImpHandleBase<uv_idle_t> imp_base_t;
 	use<IIdle> idle_self_;
+	use<IdleCallback> cb_;
 
 	ImpIdle(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_idle_init(as_uv_type(loop), this));
@@ -1066,13 +1086,12 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 
 	static void IdleCallbackRaw(uv_idle_t* handle, int status){
 		auto& imp = *static_cast<ImpIdle*>(handle);
-		auto cb = delegate_from_void<IdleCallback>(handle->data);
-		cb(imp.idle_self_, status);
+		imp.cb_(imp.idle_self_, status);
 
 	}
 
 	void StartRaw(use<IdleCallback> cb){
-		this->data = delegate_to_void(cb);
+		cb_ = cb;
 		idle_self_ = this->QueryInterface<IIdle>();
 		try{
 			throw_if_error(uv_idle_start(this, IdleCallbackRaw));
@@ -1080,6 +1099,7 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 		}
 		catch (...){
 			idle_self_ = nullptr;
+			cb_ = nullptr;
 			throw;
 		}
 	}
@@ -1110,6 +1130,7 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 	static void AsyncCallbackRaw(uv_async_t* handle, int status){
 		auto& imp = *static_cast<ImpAsync*>(handle);
 		imp.callback_(imp.QueryInterface<IAsync>(), status);
+		imp.async_self_ = nullptr;
 	}
 
 	static void DestructorCallback(uv_async_t* handle, int status){
@@ -1120,8 +1141,7 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 		uv_close(reinterpret_cast<uv_handle_t*>(handle), nullptr);
 	}
 
-	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),callback_(cb),
-		async_self_(this->QueryInterface<IAsync>())
+	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),callback_(cb)
 	{
 		throw_if_error(uv_async_init(as_uv_type(loop), this,AsyncCallbackRaw));
 		uv_async_init(as_uv_type(loop), &destructor_async_, DestructorCallback);
@@ -1133,7 +1153,14 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 
 
 	void Send(){
-		throw_if_error(uv_async_send(this));
+		try{
+			async_self_ = this->QueryInterface<IAsync>();
+			throw_if_error(uv_async_send(this));
+		}
+		catch (...){
+			async_self_ = nullptr;
+			throw;
+		}
 	}
 
 	~ImpAsync(){
@@ -1142,6 +1169,497 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 			uv_async_send(&destructor_async_);
 			
 		}
+	}
+
+};
+
+struct ImpTimer :
+	uv_timer_t, ImpHandleBase<uv_timer_t>, cppcomponents::implement_runtime_class<ImpTimer, Timer_t>{
+		typedef ImpHandleBase<uv_timer_t> imp_base_t;
+		use<ITimer> timer_self_;
+		use<TimerCallback> cb_;
+
+		static void TimerCallbackRaw(uv_timer_t* handle, int status){
+			auto& imp = *static_cast<ImpTimer*>(handle);
+			imp.cb_(imp.timer_self_, status);
+		}
+
+		void StartRaw(cppcomponents::use<TimerCallback> cb, std::uint64_t timeout, std::uint64_t repeat){
+			try{
+				cb_ = cb;
+				timer_self_ = this->QueryInterface<ITimer>();
+
+				throw_if_error(uv_timer_start(this, TimerCallbackRaw, timeout, repeat));
+
+			}
+			catch (...){
+				timer_self_ = nullptr;
+				cb_ = nullptr;
+				throw;
+			}
+		}
+	void Stop(){
+		timer_self_ = nullptr;
+		throw_if_error(uv_timer_stop(this));
+	}
+	void Again(){
+		throw_if_error(uv_timer_again(this));
+	}
+	void SetRepeat(std::uint64_t repeat){
+		uv_timer_set_repeat(this, repeat);
+	}
+	std::uint64_t GetRepeat(){
+		return uv_timer_get_repeat(this);
+	}
+
+	ImpTimer(use<ILoop> loop) : imp_base_t(this){
+		throw_if_error(uv_timer_init(as_uv_type(loop), this));
+	}
+
+};
+
+struct ImpCpuInfo : implement_runtime_class<ImpCpuInfo, CpuInfo_t>{
+
+	uv_cpu_info_t info_;
+
+	ImpCpuInfo(const uv_cpu_info_t& info) : info_(info){}
+
+	cppcomponents::cr_string GetModel(){
+		cr_string ret{ info_.model};
+		return ret;
+	}
+	std::int32_t GetSpeed(){
+		return info_.speed;
+	}
+	std::int64_t GetUser(){
+		return info_.cpu_times.user;
+	}
+	std::int64_t GetNice(){
+		return info_.cpu_times.nice;
+	}
+	std::int64_t GetSys(){
+		return info_.cpu_times.sys;
+	}
+	std::int64_t GetIdle(){
+		return info_.cpu_times.idle;
+	}
+	std::int64_t GetIrq(){
+		return info_.cpu_times.irq;
+	}
+
+
+	
+};
+
+
+struct ImpInterfaceAddress : implement_runtime_class<ImpInterfaceAddress, InterfaceAddress_t>{
+	uv_interface_address_t ia_;
+
+	ImpInterfaceAddress(const uv_interface_address_t& i) : ia_(i){}
+	cppcomponents::cr_string GetName(){
+		return cr_string{ ia_.name };
+	}
+	cppcomponents::cr_string GetPhysAddr(){
+		return cr_string{ ia_.phys_addr,sizeof(ia_.phys_addr)/sizeof(ia_.phys_addr[0]) };
+	}
+	bool IsInternal(){
+		return ia_.is_internal != 0;
+	}
+	sockaddr_in GetAddress4(){
+		return ia_.address.address4;
+	}
+	sockaddr_in6 GetAddress6(){
+		return ia_.address.address6;
+	}
+	sockaddr_in GetNetMask4(){
+		return ia_.netmask.netmask4;
+	}
+	sockaddr_in6 GetNetMask6(){
+		return ia_.netmask.netmask6;
+	}
+
+};
+
+void assure_null_terminated(cr_string s){
+	if (s.size() && s[s.size() - 1] != 0)throw error_invalid_arg();
+}
+
+struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
+	static int Version(){
+		return uv_version();
+	}
+	static cppcomponents::cr_string VersionString(){
+		return cr_string{ uv_version_string() };
+	}
+	static cppcomponents::cr_string Strerror(int err){
+		return cr_string{ uv_strerror(err) };
+	}
+	static cppcomponents::cr_string ErrName(int err){
+		return cr_string{ uv_err_name(err) };
+	}
+	static std::size_t HandleSize(int type){
+		return uv_handle_size(static_cast<uv_handle_type>(type));
+	}
+	static std::size_t ReqSize(int type){
+		return uv_req_size(static_cast<uv_req_type>(type));
+	}
+	static Buffer BufInit(void* base, std::uint32_t len){
+		auto b = uv_buf_init(static_cast<char*>(base), len);
+		Buffer ret;
+		ret.base = b.base;
+		ret.len = b.len;
+		return ret;
+	}
+	static std::size_t Strlcpy(char* dst, const char* src, std::size_t size){
+		return uv_strlcpy(dst, src, size);
+	}
+	static std::size_t Strlcat(char* dst, const char* src, std::size_t size){
+		return uv_strlcat(dst, src, size);
+	}
+	static int GuessHandle(FileOsType file){
+		return uv_guess_handle(file);
+	}
+
+	static use<IGetAddrinfoRequest> GetaddrinfoRaw(cppcomponents::use<ILoop> loop, cppcomponents::use<GetAddrinfoCallback> cb, cppcomponents::cr_string node,
+		cppcomponents::cr_string service, addrinfo* hints){
+			assure_null_terminated(node);
+			assure_null_terminated(service);
+			auto gr = ImpGetAddrinfoRequest::create(cb, loop).QueryInterface<IGetAddrinfoRequest>();
+			throw_if_error(uv_getaddrinfo(as_uv_type(loop),as_uv_type(gr), ImpGetAddrinfoRequest::RequestCb,node.data(),service.data(),hints));
+			return gr;
+	}
+
+	static void Freeaddrinfo(addrinfo* ai){
+		uv_freeaddrinfo(ai);
+	}
+
+	static char** SetupArgs(int argc, char** argv){
+		return  uv_setup_args(argc, argv);
+	}
+
+	static std::string GetProcessTitle(){
+		std::array<char, 256> ar;
+		throw_if_error(uv_get_process_title(ar.data(), ar.size()));
+		return std::string{ ar.data() };
+		
+	}
+	static void SetProcessTitle(cppcomponents::cr_string title){
+		assure_null_terminated(title);
+		throw_if_error(uv_set_process_title(title.data()));
+	}
+	static std::size_t ResidentSetMemory(){
+		std::size_t ret = 0;
+		throw_if_error(uv_resident_set_memory(&ret));
+		return ret;
+	}
+	static double Uptime(){
+		double ret = 0.0;
+		throw_if_error(uv_uptime(&ret));
+	}
+
+	static std::vector<cppcomponents::use<ICpuInfo>> CpuInfo(){
+		std::vector<use<ICpuInfo> > ret;
+		int count = 0;
+		uv_cpu_info_t* info = nullptr;
+		throw_if_error(uv_cpu_info(&info, &count));
+
+		auto deleter = [count](uv_cpu_info_t* info){
+			uv_free_cpu_info(info, count);
+		};
+		std::unique_ptr<uv_cpu_info_t, decltype(deleter)> ptr(info, deleter);
+		
+		ret.reserve(count);
+		std::transform(info, info + count, std::back_inserter(ret), [](const uv_cpu_info_t& i){
+			return ImpCpuInfo::create(i).QueryInterface<ICpuInfo>();
+		});
+		return ret;
+
+	}
+	static std::vector<cppcomponents::use<IInterfaceAddress>> InterfaceAddresses(){
+		std::vector<use<IInterfaceAddress> > ret;
+		int count = 0;
+		uv_interface_address_t* info = nullptr;
+		throw_if_error(uv_interface_addresses(&info, &count));
+
+		auto deleter = [count](uv_interface_address_t* info){
+			uv_free_interface_addresses(info, count);
+		};
+		std::unique_ptr<uv_interface_address_t, decltype(deleter)> ptr(info, deleter);
+
+		ret.reserve(count);
+		std::transform(info, info + count, std::back_inserter(ret), [](const uv_interface_address_t& i){
+			return ImpInterfaceAddress::create(i).QueryInterface<IInterfaceAddress>();
+		});
+		return ret;
+	}
+	static std::vector<double> Loadavg(){
+		std::vector<double> ret(3);
+		uv_loadavg(&ret[0]);
+	}
+
+	static sockaddr_in Ip4Addr(cr_string ip, int port){
+		assure_null_terminated(ip);
+		return uv_ip4_addr(ip.data(), port);
+	}
+	static sockaddr_in6 Ip6Addr(cr_string ip, int port){
+		assure_null_terminated(ip);
+		return uv_ip6_addr(ip.data(), port);
+	}
+
+	static std::string Ip4Name(sockaddr_in* src){
+		std::array<char, 256> ar;
+		throw_if_error(uv_ip4_name(src, ar.data(), ar.size()));
+		return std::string(ar.data());
+	}
+	static std::string Ip6Name(sockaddr_in6* src){
+		std::array<char, 256> ar;
+		throw_if_error(uv_ip6_name(src, ar.data(), ar.size()));
+		return std::string(ar.data());
+	}
+
+	static std::string InetNtop(int af, const void* src){
+		std::array<char, 256> ar;
+		throw_if_error(uv_inet_ntop(af,src, ar.data(), ar.size()));
+		return std::string(ar.data());
+	}
+	void InetPton(int af, cr_string src, void* dst){
+		assure_null_terminated(src);
+		throw_if_error(uv_inet_pton(af, src.data(), dst));
+	}
+
+	static std::string Exepath(){
+		std::array<char, 512> ar;
+		auto size = ar.size();
+		throw_if_error(uv_exepath(ar.data(), &size));
+		return std::string(ar.data(),size);
+
+	}
+	static std::string Cwd(){
+		std::array<char, 512> ar;
+		throw_if_error(uv_cwd(ar.data(), ar.size()));
+		return std::string(ar.data());
+
+	}
+	static void Chdir(cr_string dir){
+		assure_null_terminated(dir);
+		throw_if_error(uv_chdir(dir.data()));
+	}
+
+	static std::uint64_t GetFreeMemory(){
+		return uv_get_free_memory();
+	}
+	static std::uint64_t GetTotalMemory(){
+		return uv_get_total_memory();
+	}
+
+	static std::uint64_t Hrtime(){
+		return uv_hrtime();
+	}
+
+	static void DisableStdioInheritance(){
+		uv_disable_stdio_inheritance();
+	}
+
+	ImpUv(){}
+};
+
+struct ImpProcessOptions : implement_runtime_class<ImpProcessOptions, ProcessOptions_t>
+{
+	use<ExitCallback> exit_cb_;
+	uv_process_options_t p_;
+	void SetExitCallback(cppcomponents::use<ExitCallback> cb){
+		exit_cb_ = cb;
+	}
+	cppcomponents::use<ExitCallback> GetExitCallback(){
+		return exit_cb_;
+	}
+
+	std::string file_;
+	void SetFile(cppcomponents::cr_string file){
+		file_ = file.to_string();
+	}
+	std::string GetFile(){
+		return file_;
+	}
+	std::vector<std::string> args_;
+	void SetArgs(std::vector<cppcomponents::cr_string> args){
+		args_.reserve(args.size());
+		std::transform(args.begin(), args.end(), std::back_inserter(args_), [](cr_string s){
+			return s.to_string();
+		});
+	}
+	std::vector<cppcomponents::cr_string> GetArgs(){
+		std::vector<cr_string> ret(args_.begin(), args_.end());
+		return ret;
+	}
+	std::vector<std::string> env_;
+	void SetEnv(std::vector<cppcomponents::cr_string> env){
+		env_.reserve(env.size());
+		std::transform(env.begin(), env.end(), std::back_inserter(env_), [](cr_string s){
+			return s.to_string();
+		});
+	}
+	std::vector<cppcomponents::cr_string> GetEnv(){
+		std::vector<cr_string> ret(env_.begin(), env_.end());
+		return ret;
+
+	}
+	std::string cwd_;
+	void SetCwd(cppcomponents::cr_string cwd){
+		cwd_ = cwd.to_string();
+	}
+	std::string GetCwd(){
+		return cwd_;
+	}
+	unsigned int flags_; 
+	unsigned int GetFlags(){
+		return flags_;
+	}
+	void SetFlags(unsigned int flags){
+		flags_ = flags;
+	}
+
+	std::vector<use<IStdioContainer>> container_;
+	void SetStdio(std::vector < use < IStdioContainer >> container){
+		container_ = container;
+	}
+	std::vector<use<IStdioContainer>> GetStdio(){
+		return container_;
+	}
+
+	unsigned char uid_;
+	void SetUid(unsigned char uid){
+		uid_ = uid;
+	}
+	unsigned char GetUid(){
+		return uid_;
+	}
+	unsigned char gid_;
+	void SetGid(unsigned char gid){
+		gid_ = gid;
+	}
+	unsigned char GetGid(){
+		return gid_;
+	}
+
+	ImpProcessOptions()
+		: flags_{ 0 }, uid_{ 0 }, gid_{ 0 }{}
+};
+
+struct ImpStdioContainer : implement_runtime_class<ImpStdioContainer, StdioContainer_t>{
+
+	int flags_;
+	int GetFlags(){
+		return flags_;
+	}
+	void SetFlags(int flags){
+		flags_ = flags;
+	}
+	bool bstream_;
+	bool IsStream(){
+		return bstream_;
+	}
+	use<clv::IStream> stream_;
+	void SetStream(cppcomponents::use<clv::IStream> s){
+		stream_ = s;
+		bstream_ = true;
+	}
+	cppcomponents::use<clv::IStream> GetStream(){
+		return stream_;
+	}
+	FileOsType fd_;
+	void SetFd(FileOsType fd){
+		fd_ = fd;
+		bstream_ = false;
+	}
+	FileOsType GetFd(){
+		return fd_;
+	}
+
+	ImpStdioContainer()
+		: flags_{ 0 }, bstream_{ false }, fd_{ 0 }{}
+};
+
+struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_class<ImpProcess, Process_t>
+{
+	typedef ImpHandleBase<uv_process_t> imp_base_t;
+	use <ExitCallback> cb_;
+	use<IProcess> self_;
+	void Kill(int signum){
+		throw_if_error(uv_process_kill(this, signum));
+
+	}
+
+	int GetPid(){
+		return this->pid;
+	}
+
+	static void Kill(int pid, int signum){
+		throw_if_error(uv_kill(pid, signum));
+	}
+
+
+	static void ExitCallbackRaw(uv_process_t* p, int exit_status, int sig_term){
+		auto& imp = *static_cast<ImpProcess*>(p);
+		imp.cb_(imp.self_, exit_status, sig_term);
+		imp.self_ = nullptr;
+	}
+
+	ImpProcess(use<ILoop> loop, use<IProcessOptions> po):imp_base_t{this}{
+		cb_ = po.GetExitCallback();
+		uv_process_options_t uvpo = { 0 };
+		std::vector<const char*> args;
+		for (auto& s : po.GetArgs()){
+			args.push_back(s.data());
+		}
+
+		// Add null to end of arguments array per convention
+		args.push_back(nullptr);
+
+		uvpo.args = const_cast<char**>(&args[0]);
+		uvpo.cwd = const_cast<char*>(po.GetCwd().c_str());
+
+		auto venv = po.GetEnv();
+		if (venv.empty()){
+			uvpo.env = nullptr;
+		}
+		else{
+			std::vector<const char*> env;
+			for (auto& s : venv){
+				env.push_back(s.data());
+			}
+			uvpo.env = const_cast<char**>(&env[0]);
+
+		}
+	
+		if (cb_){
+			uvpo.exit_cb = ExitCallbackRaw;
+		}
+		std::string file = po.GetFile();
+		uvpo.file = file.c_str();
+
+		uvpo.flags = po.GetFlags();
+		uvpo.gid = po.GetGid();
+		auto stdio = po.GetStdio();
+		if (!stdio.empty()){
+			std::vector<uv_stdio_container_t> uvstdio;
+			for (auto& c : stdio){
+				uv_stdio_container_t uvc = { };
+				uvc.flags =static_cast<uv_stdio_flags>(c.GetFlags());
+				if (c.IsStream()){
+					uvc.data.stream = as_uv_type(c.GetStream());
+				}
+				else{
+					uvc.data.fd = c.GetFd();
+				}
+				uvstdio.push_back(uvc);
+			}
+			uvpo.stdio = &uvstdio[0];
+			uvpo.stdio_count = uvstdio.size();
+		}
+		uvpo.uid = po.GetUid();
+		throw_if_error(uv_spawn(as_uv_type(loop), this, uvpo));
+		self_ = this->QueryInterface<IProcess>();
 	}
 
 };
