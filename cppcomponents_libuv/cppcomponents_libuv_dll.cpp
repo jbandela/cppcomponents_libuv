@@ -423,7 +423,7 @@ struct ImpHandleBase{
 
 	bool closed(){ return closed_; }
 
-	void CloseRaw(use<CloseCallback> cb){
+	void Close(use<CloseCallback> cb){
 		closed_ = true;
 		handle_->data = cb.get_portable_base_addref();
 		uv_close(handle_, CloseCallbackRaw);
@@ -529,12 +529,12 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
 	}
 
-	void WalkRaw(use<WalkCallback> cb){
+	void Walk(use<WalkCallback> cb){
 
 		uv_walk(loop_, WalkCallbackRaw, cb.get_portable_base());
 	}
 
-	use<IWorkRequest> QueueWorkRaw(use<WorkCallback> wcb, use<AfterWorkCallback> awcb){
+	use<IWorkRequest> QueueWork(use<WorkCallback> wcb, use<AfterWorkCallback> awcb){
 		auto wr = ImpWorkRequest::create(wcb, awcb, this->QueryInterface<ILoop>()).QueryInterface<IWorkRequest>();
 		uv_queue_work(loop_, as_uv_type(wr),ImpWorkRequest::RequestCb,ImpWorkRequest::AfterRequestCb);
 		return wr;
@@ -566,7 +566,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	use<ConnectionCallback> connection_cb_;
 	use<ReadCallback> read_cb_;
 
-	use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback> cb){
+	use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		return ImpShutdownRequest::create(cb, is).QueryInterface<IShutdownRequest>();
 	}
@@ -578,7 +578,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		imp.connection_cb_(is,status);
 	}
 
-	void ListenRaw(int backlog, use<ConnectionCallback> cb){
+	void Listen(int backlog, use<ConnectionCallback> cb){
 
 		connection_cb_ = cb; 
 		throw_if_error(uv_listen(this->get(), backlog, ConnectionCallbackRaw));
@@ -600,7 +600,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		delete buf.base;
 	}
 
-	void ReadStartRaw(use<ReadCallback> cb){
+	void ReadStart(use<ReadCallback> cb){
 		read_cb_ = cb;
 		istream_self_ = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();;
 		try{
@@ -633,7 +633,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	// Can't figure out how to use uv_read2_start
 	// Plan on implentation after more research
-	void Read2StartRaw(use<Read2Callback> cb){
+	void Read2Start(use<Read2Callback> cb){
 		throw error_not_implemented();
 
 	/*	auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
@@ -661,7 +661,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		*/
 	}
 
-	use<IWriteRequest> WriteRaw(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
+	use<IWriteRequest> Write(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
 		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
 		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->QueryInterface<clv::IStream>()).QueryInterface<IWriteRequest>();
 		throw_if_error(uv_write(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
@@ -670,7 +670,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		return wr;
 
 	}	
-	use<IWriteRequest> Write2Raw(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
+	use<IWriteRequest> Write2(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
 		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
 		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->QueryInterface<clv::IStream>()).QueryInterface<IWriteRequest>();;
 		throw_if_error(uv_write2(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
@@ -731,21 +731,21 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 		throw_if_error(uv_tcp_bind6(this, in6));
 	}
 
-	void GetsocknameRaw(sockaddr* name, int* namelen){
+	void Getsockname(sockaddr* name, int* namelen){
 		
 		throw_if_error(uv_tcp_getsockname(this, name, namelen));
 	}
 
-	void GetpeernameRaw(sockaddr* name, int* namelen){
+	void Getpeername(sockaddr* name, int* namelen){
 		throw_if_error(uv_tcp_getpeername(this, name, namelen));
 	}
 
-	use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback> cb){
+	use<IConnectRequest> Connect(sockaddr_in address, cppcomponents::use<ConnectCallback> cb){
 		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
 		throw_if_error(uv_tcp_connect(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
 		return cr;
 	}
-	use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback> cb){
+	use<IConnectRequest> Connect6(sockaddr_in6 address, cppcomponents::use<ConnectCallback> cb){
 		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
 		throw_if_error(uv_tcp_connect6(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
 		return cr;
@@ -783,7 +783,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 	void Bind6(sockaddr_in6 in, std::uint32_t flags){
 		throw_if_error(uv_udp_bind6(this, in, flags));
 	}
-	void GetSocknameRaw(sockaddr* name, int* namelen){
+	void GetSockname(sockaddr* name, int* namelen){
 		throw_if_error(uv_udp_getsockname(this, name, namelen));
 	}
 	void SetMembership(cppcomponents::cr_string multicast_addr, cppcomponents::cr_string interface_addr,
@@ -804,14 +804,14 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 	void SetTtl(std::int32_t ttl){
 		throw_if_error(uv_udp_set_ttl(this, ttl));
 	}
-	use<IUdpSendRequest> SendRaw(Buffer* bufs, int buffcnt, sockaddr_in addr,
+	use<IUdpSendRequest> Send(Buffer* bufs, int buffcnt, sockaddr_in addr,
 		cppcomponents::use<UdpSendCallback> cb){
 			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
 			throw_if_error(uv_udp_send(as_uv_type(sr), this,
 				as_uv_type(bufs),buffcnt, addr, ImpUdpSendRequest::RequestCb));
 			return sr;
 	}
-	use<IUdpSendRequest> Send6Raw(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
+	use<IUdpSendRequest> Send6(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
 		cppcomponents::use<UdpSendCallback> cb){
 			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
 			throw_if_error(uv_udp_send6(as_uv_type(sr), this,
@@ -833,7 +833,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 	}
 
 
-	void RecvStartRaw(cppcomponents::use<UdpRecvCallback> cb){
+	void RecvStart(cppcomponents::use<UdpRecvCallback> cb){
 		cb_ = cb;
 		self_ = this->QueryInterface<IUdpStream>();
 		try{
@@ -915,7 +915,7 @@ struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_
 		throw_if_error(uv_pipe_bind(this, name.data()));
 	}
 
-	use<IConnectRequest> ConnectRaw(cr_string name, use<ConnectCallback> cb){
+	use<IConnectRequest> Connect(cr_string name, use<ConnectCallback> cb){
 		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
 		uv_pipe_connect(as_uv_type(cr), this, name.data(), ImpConnectRequest::RequestCb);
 		return cr;
@@ -953,7 +953,7 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<Im
 
 	}
 
-	void StartRaw(int events, use<PollCallback> cb){
+	void Start(int events, use<PollCallback> cb){
 		cb_ = cb;
 		poll_self_ = this->QueryInterface<IPoll>();
 		try{
@@ -1000,7 +1000,7 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 
 	}
 
-	void StartRaw(use<PrepareCallback> cb){
+	void Start(use<PrepareCallback> cb){
 		cb_ = cb;
 		prepare_self_ = this->QueryInterface<IPrepare>();
 		try{
@@ -1047,7 +1047,7 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 
 	}
 
-	void StartRaw(use<CheckCallback> cb){
+	void Start(use<CheckCallback> cb){
 		cb_ = cb;
 		check_self_ = this->QueryInterface<ICheck>();
 		try{
@@ -1092,7 +1092,7 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 
 	}
 
-	void StartRaw(use<IdleCallback> cb){
+	void Start(use<IdleCallback> cb){
 		cb_ = cb;
 		idle_self_ = this->QueryInterface<IIdle>();
 		try{
@@ -1135,7 +1135,7 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 		imp.async_self_ = nullptr;
 	}
 
-	static void DestructorCallback(uv_async_t* handle, int status){
+	static void DestructorCallbackRaw(uv_async_t* handle, int status){
 		auto hself = static_cast<uv_handle_t*>(handle->data);
 
 		// close both handles
@@ -1146,7 +1146,7 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),callback_(cb)
 	{
 		throw_if_error(uv_async_init(as_uv_type(loop), this,AsyncCallbackRaw));
-		uv_async_init(as_uv_type(loop), &destructor_async_, DestructorCallback);
+		uv_async_init(as_uv_type(loop), &destructor_async_, DestructorCallbackRaw);
 		destructor_async_.data = this;
 
 
@@ -1186,7 +1186,7 @@ struct ImpTimer :
 			imp.cb_(imp.timer_self_, status);
 		}
 
-		void StartRaw(cppcomponents::use<TimerCallback> cb, std::uint64_t timeout, std::uint64_t repeat){
+		void Start(cppcomponents::use<TimerCallback> cb, std::uint64_t timeout, std::uint64_t repeat){
 			try{
 				cb_ = cb;
 				timer_self_ = this->QueryInterface<ITimer>();
@@ -1329,7 +1329,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 		return uv_guess_handle(file);
 	}
 
-	static use<IGetAddrinfoRequest> GetaddrinfoRaw(cppcomponents::use<ILoop> loop, cppcomponents::use<GetAddrinfoCallback> cb, cppcomponents::cr_string node,
+	static use<IGetAddrinfoRequest> Getaddrinfo(cppcomponents::use<ILoop> loop, cppcomponents::use<GetAddrinfoCallback> cb, cppcomponents::cr_string node,
 		cppcomponents::cr_string service, addrinfo* hints){
 			assure_null_terminated(node);
 			assure_null_terminated(service);
@@ -1681,14 +1681,14 @@ struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_
 };
 
 
-struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
-	static use<IFsRequest> CloseRaw(use<ILoop> loop , FileOsType file, use<FsCallback> cb){
+struct ImpFs : implement_runtime_class<ImpFs, Fs_t>{
+	static use<IFsRequest> Close(use<ILoop> loop , FileOsType file, use<FsCallback> cb){
 		auto ret = ImpFsRequest::create(cb,loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_close(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
 		return ret;
 	}
 
-	static use<IFsRequest> OpenRaw(use<ILoop> loop, cr_string path, int flags,
+	static use<IFsRequest> Open(use<ILoop> loop, cr_string path, int flags,
 		int mode, use<FsCallback> cb){
 			assure_null_terminated(path);
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
@@ -1696,7 +1696,7 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 			return ret;
 	}
 
-	static use<IFsRequest> ReadRaw(use<ILoop> loop, FileOsType file, void* buf,
+	static use<IFsRequest> Read(use<ILoop> loop, FileOsType file, void* buf,
 		std::size_t length, std::int64_t offset, use<FsCallback> cb){
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_read(as_uv_type(loop), as_uv_type(ret), file, buf,length,offset,ImpFsRequest::RequestCb));
@@ -1704,14 +1704,14 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 
 	}
 
-	static use<IFsRequest> UnlinkRaw(use<ILoop> loop, cr_string path, use<FsCallback> cb){
+	static use<IFsRequest> Unlink(use<ILoop> loop, cr_string path, use<FsCallback> cb){
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_unlink(as_uv_type(loop), as_uv_type(ret), path.data(), ImpFsRequest::RequestCb));
 		return ret;
 
 	}
 
-	static use<IFsRequest> WriteRaw(use<ILoop> loop, FileOsType file, const void* buf,
+	static use<IFsRequest> Write(use<ILoop> loop, FileOsType file, const void* buf,
 		std::size_t length, std::int64_t offset, use<FsCallback> cb){
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_write(as_uv_type(loop), as_uv_type(ret), file,buf,length,offset, ImpFsRequest::RequestCb));
@@ -1719,14 +1719,14 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 
 	}
 
-	static use<IFsRequest> MkdirRaw(use<ILoop> loop, cr_string path, int mode, use<FsCallback> cb){
+	static use<IFsRequest> Mkdir(use<ILoop> loop, cr_string path, int mode, use<FsCallback> cb){
 		assure_null_terminated(path);
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_mkdir(as_uv_type(loop), as_uv_type(ret), path.data(),mode, ImpFsRequest::RequestCb));
 		return ret;
 
 	}
-	static use<IFsRequest> RmdirRaw(use<ILoop> loop, cr_string path, use<FsCallback> cb){
+	static use<IFsRequest> Rmdir(use<ILoop> loop, cr_string path, use<FsCallback> cb){
 		assure_null_terminated(path);
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_rmdir(as_uv_type(loop), as_uv_type(ret), path.data(),ImpFsRequest::RequestCb));
@@ -1734,26 +1734,26 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 
 	}
 
-	static use<IFsRequest> ReaddirRaw(use<ILoop> loop, cr_string path, int flags, use<FsCallback> cb){
+	static use<IFsRequest> Readdir(use<ILoop> loop, cr_string path, int flags, use<FsCallback> cb){
 		assure_null_terminated(path);
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_readdir(as_uv_type(loop), as_uv_type(ret), path.data(),flags,ImpFsRequest::RequestCb));
 		return ret;
 	}
-	static use<IFsRequest> StatRaw(use<ILoop> loop, cr_string path, use<FsCallback> cb){
+	static use<IFsRequest> Stat(use<ILoop> loop, cr_string path, use<FsCallback> cb){
 		assure_null_terminated(path);
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_stat(as_uv_type(loop), as_uv_type(ret), path.data(),ImpFsRequest::RequestCb));
 		return ret;
 
 	}
-	static use<IFsRequest> FstatRaw(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
+	static use<IFsRequest> Fstat(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_fstat(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
 		return ret;
 
 	}
-	static use<IFsRequest> RenameRaw(use<ILoop> loop, cr_string path, cr_string new_path, use<FsCallback> cb){
+	static use<IFsRequest> Rename(use<ILoop> loop, cr_string path, cr_string new_path, use<FsCallback> cb){
 		assure_null_terminated(path);
 		assure_null_terminated(new_path);
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
@@ -1761,33 +1761,33 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 		return ret;
 
 	}
-	static use<IFsRequest> FsyncRaw(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
+	static use<IFsRequest> Fsync(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_fsync(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
 		return ret;
 
 	}
-	static use<IFsRequest> FdatasyncRaw(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
+	static use<IFsRequest> Fdatasync(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
 		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 		throw_if_error(uv_fs_fdatasync(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
 		return ret;
 
 	}
-	static use<IFsRequest> FtruncateRaw(use<ILoop> loop, FileOsType file,
+	static use<IFsRequest> Ftruncate(use<ILoop> loop, FileOsType file,
 		std::int64_t offset, use<FsCallback> cb){
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_ftruncate(as_uv_type(loop), as_uv_type(ret), file,offset, ImpFsRequest::RequestCb));
 			return ret;
 
 	}
-	static use<IFsRequest> SendfileRaw(use<ILoop> loop, FileOsType file_out, FileOsType file_in,
+	static use<IFsRequest> Sendfile(use<ILoop> loop, FileOsType file_out, FileOsType file_in,
 		std::int64_t in_offset, std::size_t length, use<FsCallback> cb){
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_sendfile(as_uv_type(loop), as_uv_type(ret), file_out,file_in,in_offset,length, ImpFsRequest::RequestCb));
 			return ret;
 
 	}
-	static use<IFsRequest> ChmodRaw(use<ILoop> loop, cr_string path,
+	static use<IFsRequest> Chmod(use<ILoop> loop, cr_string path,
 		int mode, use<FsCallback> cb){
 			assure_null_terminated(path);
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
@@ -1795,7 +1795,7 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 			return ret;
 
 	}
-	static use<IFsRequest> UtimeRaw(use<ILoop> loop, cr_string path, double atime,
+	static use<IFsRequest> Utime(use<ILoop> loop, cr_string path, double atime,
 		double mtime, use<FsCallback> cb){
 			assure_null_terminated(path);
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
@@ -1803,21 +1803,21 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 			return ret;
 
 	}
-	static use<IFsRequest> FutimeRaw(use<ILoop> loop, FileOsType file, double atime,
+	static use<IFsRequest> Futime(use<ILoop> loop, FileOsType file, double atime,
 		double mtime, use<FsCallback> cb){
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_futime(as_uv_type(loop), as_uv_type(ret), file,atime,mtime, ImpFsRequest::RequestCb));
 			return ret;
 
 	}
-	static use<IFsRequest> LstatRaw(use<ILoop> loop, cr_string path, use<FsCallback>cb){
+	static use<IFsRequest> Lstat(use<ILoop> loop, cr_string path, use<FsCallback>cb){
 			assure_null_terminated(path);
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_lstat(as_uv_type(loop), as_uv_type(ret), path.data(), ImpFsRequest::RequestCb));
 			return ret;
 
 	}
-	static use<IFsRequest> LinkRaw(use<ILoop> loop, cr_string path, cr_string new_path,
+	static use<IFsRequest> Link(use<ILoop> loop, cr_string path, cr_string new_path,
 		use<FsCallback> cb){
 			assure_null_terminated(path);
 			assure_null_terminated(new_path);
@@ -1827,7 +1827,7 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 
 	}
 
-	static use<IFsRequest> SymlinkRaw(use<ILoop> loop, cr_string path,
+	static use<IFsRequest> Symlink(use<ILoop> loop, cr_string path,
 		cr_string new_path, int flags, use<FsCallback> cb){
 			assure_null_terminated(path);
 			assure_null_terminated(new_path);
@@ -1836,7 +1836,7 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 			return ret;
 
 	}
-	static use<IFsRequest> ReadlinkRaw(use<ILoop>loop, cr_string path, use<FsCallback> cb){
+	static use<IFsRequest> Readlink(use<ILoop>loop, cr_string path, use<FsCallback> cb){
 			assure_null_terminated(path);
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_readlink(as_uv_type(loop), as_uv_type(ret), path.data(), ImpFsRequest::RequestCb));
@@ -1846,14 +1846,14 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 
 	}
 
-	static use<IFsRequest> FchmodRaw(use<ILoop> loop, FileOsType file,
+	static use<IFsRequest> Fchmod(use<ILoop> loop, FileOsType file,
 		int mode, use<FsCallback> cb){
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_fchmod(as_uv_type(loop), as_uv_type(ret), file,mode, ImpFsRequest::RequestCb));
 			return ret;
 	}
 
-	static use<IFsRequest> ChownRaw(use<ILoop> loop, cr_string path, unsigned char uid,
+	static use<IFsRequest> Chown(use<ILoop> loop, cr_string path, unsigned char uid,
 		unsigned char gid, use<FsCallback> cb){
 			assure_null_terminated(path);
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
@@ -1861,7 +1861,7 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 			return ret;
 	}
 
-	static use<IFsRequest> FchownRaw(use<ILoop> loop, FileOsType file, unsigned char uid,
+	static use<IFsRequest> Fchown(use<ILoop> loop, FileOsType file, unsigned char uid,
 		unsigned char gid, use<FsCallback> cb){
 			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
 			throw_if_error(uv_fs_fchown(as_uv_type(loop), as_uv_type(ret), file,uid,gid,ImpFsRequest::RequestCb));
@@ -1869,7 +1869,7 @@ struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
 
 	}
 
-	ImpFsRaw(){}
+	ImpFs(){}
 
 };
 
@@ -1885,7 +1885,7 @@ struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<uv_fs_poll_t>, implement_runtime_
 		imp.cb_(imp.QueryInterface<IFsPoll>(), status, reinterpret_cast<const Stat*>(prev),
 			reinterpret_cast<const Stat*>(curr));
 	}
-	void StartRaw(use<FsPollCallback> cb, cr_string path, unsigned int msinterval){
+	void Start(use<FsPollCallback> cb, cr_string path, unsigned int msinterval){
 		cb_ = cb;
 		self_ = this->QueryInterface<IFsPoll>();
 		try{
@@ -1928,7 +1928,7 @@ struct ImpSignal :uv_signal_t,ImpHandleBase<uv_signal_t>, implement_runtime_clas
 		auto& imp = *static_cast<ImpSignal*>(handle);
 		imp.cb_(imp.QueryInterface<ISignal>(), signum);
 	}
-	void StartRaw(use<SignalCallback> cb, int signum){
+	void Start(use<SignalCallback> cb, int signum){
 		cb_ = cb;
 		self_ = this->QueryInterface<ISignal>();
 		try{
@@ -2026,7 +2026,7 @@ struct ImpRwlock : implement_runtime_class<ImpRwlock, Rwlock_t>{
 		uv_rwlock_rdlock(&h_);
 	}
 	bool Tryrdlock(){
-		return uv_rwlock_rdlock(&h) == 0;
+		return uv_rwlock_tryrdlock(&h_) == 0;
 	}
 	void Rdunlock(){
 		uv_rwlock_rdunlock(&h_);

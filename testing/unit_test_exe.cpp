@@ -49,7 +49,7 @@ int main() {
 
 	luv::Idle idler{loop};
 
-	idler.StartRaw(make_delegate<luv::IdleCallback>(wait_for_a_while));
+	idler.Start(make_delegate<luv::IdleCallback>(wait_for_a_while));
 
 
 
