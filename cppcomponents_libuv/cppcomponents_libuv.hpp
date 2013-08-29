@@ -814,7 +814,8 @@ namespace cppcomponents_libuv{
 	};
 
 	inline std::string CpuInfoId(){ return "cppcomponents_lib_uv_dll!CpuInfo"; }
-	typedef cppcomponents::runtime_class<CpuInfoId, cppcomponents::object_interfaces<ICpuInfo>>
+	typedef cppcomponents::runtime_class<CpuInfoId, cppcomponents::object_interfaces<ICpuInfo>,
+	cppcomponents::factory_interface<cppcomponents::NoConstructorFactoryInterface>>
 		CpuInfo_t;
 
 	struct IInterfaceAddress
@@ -832,7 +833,8 @@ namespace cppcomponents_libuv{
 			GetNetMask4, GetNetMask6);
 	};
 	inline std::string InterfaceAddressId(){ return "cppcomponents_lib_uv_dll!InterfaceAddress"; }
-	typedef cppcomponents::runtime_class<InterfaceAddressId, cppcomponents::object_interfaces<IInterfaceAddress>>
+	typedef cppcomponents::runtime_class<InterfaceAddressId, cppcomponents::object_interfaces<IInterfaceAddress>,
+		cppcomponents::factory_interface < cppcomponents::NoConstructorFactoryInterface >>
 		InterfaceAddress_t;
 
 	struct IUvStatics
@@ -987,9 +989,9 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface<
 		cppcomponents::uuid<0x66fdeeba , 0x6b9f , 0x4003 , 0x8fc1 , 0x8192d21488cf	> >
 	{
-		cppcomponents::use<cppcomponents::InterfaceUnknown> Kill(int pid, int signum);
+		void KillProcess(int pid, int signum);
 
-		CPPCOMPONENTS_CONSTRUCT(IProcessStatics, Kill);
+		CPPCOMPONENTS_CONSTRUCT(IProcessStatics, KillProcess);
 	};
 
 	inline std::string ProcessId(){ return "cppcomponents_lib_uv_dll!Process"; }

@@ -557,8 +557,8 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf, int pending) > Read2CallbackHelper;
 
 	use<clv::IStream> istream_self_;
-	use<ConnectionCallbackHelper> connection_cb_;
-	use<ReadCallbackHelper> read_cb_;
+	use<ConnectionCallback> connection_cb_;
+	use<ReadCallback> read_cb_;
 
 	use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
@@ -566,16 +566,15 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	}
 
 	static void ConnectionCallbackRaw(uv_stream_t* server, int status){
-		ImpStreamBase& imp = *static_cast<Derived*>(server);
-		imp.connection_cb_(status);
+		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(server));
+		ImpStreamBase& imp = *derived;
+		auto is = derived->template QueryInterface<clv::IStream>();
+		imp.connection_cb_(is,status);
 	}
 
 	void ListenRaw(int backlog, use<ConnectionCallback> cb){
-		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
-		auto cbh = make_delegate<ConnectionCallbackHelper>([is,cb](int status){
-			cb(is, status);
-		});
-		connection_cb_ = cbh;
+
+		connection_cb_ = cb; 
 		throw_if_error(uv_listen(this->get(), backlog, ConnectionCallbackRaw));
 	}
 
@@ -587,20 +586,17 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		Buffer b;
 		b.base = buf.base;
 		b.len = buf.len;
-
-		auto cb = delegate_from_void<ReadCallbackHelper>(stream->data);
-		cb(nread, b);
+		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(stream));
+		ImpStreamBase& imp = *derived;
+		auto is = derived->template QueryInterface<clv::IStream>();
+		imp.read_cb_(is, nread, b);
 
 		delete buf.base;
 	}
 
 	void ReadStartRaw(use<ReadCallback> cb){
-		auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
-		auto cbh = make_delegate<ReadCallbackHelper>([is, cb](std::ptrdiff_t nread, Buffer buf){
-			cb(is, nread, buf);
-		});
-		read_cb_ = cbh;
-		istream_self_ = is;
+		read_cb_ = cb;
+		istream_self_ = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();;
 		try{
 		throw_if_error(uv_read_start(this->get(), AllocCallbackRaw, ReadCallbackRaw));
 		}
@@ -1355,6 +1351,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 	static double Uptime(){
 		double ret = 0.0;
 		throw_if_error(uv_uptime(&ret));
+		return ret;
 	}
 
 	static std::vector<cppcomponents::use<ICpuInfo>> CpuInfo(){
@@ -1395,6 +1392,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 	static std::vector<double> Loadavg(){
 		std::vector<double> ret(3);
 		uv_loadavg(&ret[0]);
+		return ret;
 	}
 
 	static sockaddr_in Ip4Addr(cr_string ip, int port){
@@ -1422,7 +1420,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 		throw_if_error(uv_inet_ntop(af,src, ar.data(), ar.size()));
 		return std::string(ar.data());
 	}
-	void InetPton(int af, cr_string src, void* dst){
+	static void InetPton(int af, cr_string src, void* dst){
 		assure_null_terminated(src);
 		throw_if_error(uv_inet_pton(af, src.data(), dst));
 	}
@@ -1594,7 +1592,7 @@ struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_
 		return this->pid;
 	}
 
-	static void Kill(int pid, int signum){
+	static void KillProcess(int pid, int signum){
 		throw_if_error(uv_kill(pid, signum));
 	}
 
