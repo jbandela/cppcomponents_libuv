@@ -86,6 +86,9 @@
     <ProjectReference Include="..\..\..\dependencies\libuv\libuv.vcxproj">
       <Project>{33066374-88cb-cb8d-15da-61032886329a}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\cppcomponents_libuv_dll\cppcomponents_libuv_dll.vcxproj">
+      <Project>{8667d118-2383-484a-b133-4d6e7f84629e}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\cppcomponents_libuv\cppcomponents_libuv.hpp" />

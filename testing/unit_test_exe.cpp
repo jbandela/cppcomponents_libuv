@@ -343,58 +343,14 @@ wc_printer pr_;
 
 #include "../cppcomponents_libuv/ppl_helper.hpp"
 
+
+#include "../cppcomponents_libuv/cppcomponents_libuv.hpp"
+
 int main() {
 
+	auto loop = cppcomponents_libuv::Loop::DefaultLoop();
 
-	std::cout << "main thread is thread " << uv_thread_self() << "\n";
+	std::cout << cppcomponents_libuv::Uv::VersionString().to_string();
 
-	value_waiter<long> waiter;
-	value_waiter<void> done;
-	future<long> fut(waiter);
-
-
-	assert(fut.ready() == false);
-	future<void>([waiter]()mutable{waiter.set(fib(15)); });
-
-
-	std::cout << "Cout at the beginning\n";
-
-	auto fut3 = future<std::string>([](){return std::string("Hello Await"); });
-
-	auto fut4 = future_helper::do_async([fut,fut3](future_helper::async_helper<void> helper){
-		fprintf(stderr, " do_async in thread %d\n", uv_thread_self());
-		auto f = helper.await(fut);
-		fprintf(stderr, "The 15th fibonacci is %d\n", f);
-		auto s = helper.await(fut3) + "\n\n";
-		std::string s2 = s;
-		fprintf(stderr, " do_async2 in thread %d\n", uv_thread_self());
-		fprintf(stderr, s.c_str());
-
-		future <std::string> in_async_future([](){
-			fprintf(stderr, " in_async_future in thread %d\n", uv_thread_self());
-		return std::string("Goodbye from do_async\n"); });
-
-		s = helper.await(in_async_future);
-		fprintf(stderr, " do_async3 in thread %d\n", uv_thread_self());
-		fprintf(stderr, s.c_str());
-		future<std::string> input_future([](){
-			std::cout << "Enter a name\n";
-			std::string name;
-			std::cin >> name;
-			return name;
-		});
-
-		auto name = helper.await(input_future);
-
-		future<void> output_future([&name](){
-			std::cout << "Hello " << name << "\n";
-		});
-		helper.await(output_future);
-
-
-
-	});
-	auto ret = uv_run(uv_default_loop(), UV_RUN_DEFAULT);
-	return ret;
-
+	loop.Run();
 }

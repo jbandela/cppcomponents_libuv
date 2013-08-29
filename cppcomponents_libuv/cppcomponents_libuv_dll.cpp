@@ -45,6 +45,9 @@ uv_write_t* as_uv_type(use<IWriteRequest> r){
 uv_getaddrinfo_t* as_uv_type(use<IGetAddrinfoRequest> r){
 	return static_cast<uv_getaddrinfo_t*>(r.UvHandle());
 }
+uv_fs_t* as_uv_type(use<IFsRequest> r){
+	return static_cast<uv_fs_t*>(r.UvHandle());
+}
 
 
 typedef runtime_class<dummyid, object_interfaces<IGetAddrinfoRequest>> GetAddrinfoRequest_t;
@@ -480,8 +483,11 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 	}
 
 	static use<ILoop> DefaultLoop(){
-		struct uniq{};
-		return cross_compiler_interface::detail::safe_static_init < ImpLoop, uniq>::get(uv_default_loop(), false).QueryInterface<ILoop>();
+		struct LoopHolder{
+			use<ILoop> loop_;
+			LoopHolder(uv_loop_t* loop) : loop_{ImpLoop::create(loop,false).QueryInterface<ILoop>()}{}
+		};
+		return cross_compiler_interface::detail::safe_static_init < LoopHolder, LoopHolder>::get(uv_default_loop()).loop_;
 	}
 
 	void Run(){
@@ -1212,6 +1218,13 @@ struct ImpTimer :
 		throw_if_error(uv_timer_init(as_uv_type(loop), this));
 	}
 
+	~ImpTimer(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+
 };
 
 struct ImpCpuInfo : implement_runtime_class<ImpCpuInfo, CpuInfo_t>{
@@ -1659,5 +1672,326 @@ struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_
 		throw_if_error(uv_spawn(as_uv_type(loop), this, uvpo));
 		self_ = this->QueryInterface<IProcess>();
 	}
+	~ImpProcess(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
 
 };
+
+
+struct ImpFsRaw : implement_runtime_class<ImpFsRaw, FsRaw_t>{
+	static use<IFsRequest> CloseRaw(use<ILoop> loop , FileOsType file, use<FsCallback> cb){
+		auto ret = ImpFsRequest::create(cb,loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_close(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
+		return ret;
+	}
+
+	static use<IFsRequest> OpenRaw(use<ILoop> loop, cr_string path, int flags,
+		int mode, use<FsCallback> cb){
+			assure_null_terminated(path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_open(as_uv_type(loop), as_uv_type(ret), path.data(),flags,mode, ImpFsRequest::RequestCb));
+			return ret;
+	}
+
+	static use<IFsRequest> ReadRaw(use<ILoop> loop, FileOsType file, void* buf,
+		std::size_t length, std::int64_t offset, use<FsCallback> cb){
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_read(as_uv_type(loop), as_uv_type(ret), file, buf,length,offset,ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+
+	static use<IFsRequest> UnlinkRaw(use<ILoop> loop, cr_string path, use<FsCallback> cb){
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_unlink(as_uv_type(loop), as_uv_type(ret), path.data(), ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+
+	static use<IFsRequest> WriteRaw(use<ILoop> loop, FileOsType file, const void* buf,
+		std::size_t length, std::int64_t offset, use<FsCallback> cb){
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_write(as_uv_type(loop), as_uv_type(ret), file,buf,length,offset, ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+
+	static use<IFsRequest> MkdirRaw(use<ILoop> loop, cr_string path, int mode, use<FsCallback> cb){
+		assure_null_terminated(path);
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_mkdir(as_uv_type(loop), as_uv_type(ret), path.data(),mode, ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+	static use<IFsRequest> RmdirRaw(use<ILoop> loop, cr_string path, use<FsCallback> cb){
+		assure_null_terminated(path);
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_rmdir(as_uv_type(loop), as_uv_type(ret), path.data(),ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+
+	static use<IFsRequest> ReaddirRaw(use<ILoop> loop, cr_string path, int flags, use<FsCallback> cb){
+		assure_null_terminated(path);
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_readdir(as_uv_type(loop), as_uv_type(ret), path.data(),flags,ImpFsRequest::RequestCb));
+		return ret;
+	}
+	static use<IFsRequest> StatRaw(use<ILoop> loop, cr_string path, use<FsCallback> cb){
+		assure_null_terminated(path);
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_stat(as_uv_type(loop), as_uv_type(ret), path.data(),ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+	static use<IFsRequest> FstatRaw(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_fstat(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+	static use<IFsRequest> RenameRaw(use<ILoop> loop, cr_string path, cr_string new_path, use<FsCallback> cb){
+		assure_null_terminated(path);
+		assure_null_terminated(new_path);
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_rename(as_uv_type(loop), as_uv_type(ret), path.data(),new_path.data(),ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+	static use<IFsRequest> FsyncRaw(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_fsync(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+	static use<IFsRequest> FdatasyncRaw(use<ILoop> loop, FileOsType file, use<FsCallback> cb){
+		auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+		throw_if_error(uv_fs_fdatasync(as_uv_type(loop), as_uv_type(ret), file, ImpFsRequest::RequestCb));
+		return ret;
+
+	}
+	static use<IFsRequest> FtruncateRaw(use<ILoop> loop, FileOsType file,
+		std::int64_t offset, use<FsCallback> cb){
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_ftruncate(as_uv_type(loop), as_uv_type(ret), file,offset, ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+	static use<IFsRequest> SendfileRaw(use<ILoop> loop, FileOsType file_out, FileOsType file_in,
+		std::int64_t in_offset, std::size_t length, use<FsCallback> cb){
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_sendfile(as_uv_type(loop), as_uv_type(ret), file_out,file_in,in_offset,length, ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+	static use<IFsRequest> ChmodRaw(use<ILoop> loop, cr_string path,
+		int mode, use<FsCallback> cb){
+			assure_null_terminated(path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_chmod(as_uv_type(loop), as_uv_type(ret), path.data(),mode, ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+	static use<IFsRequest> UtimeRaw(use<ILoop> loop, cr_string path, double atime,
+		double mtime, use<FsCallback> cb){
+			assure_null_terminated(path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_utime(as_uv_type(loop), as_uv_type(ret), path.data(),atime,mtime, ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+	static use<IFsRequest> FutimeRaw(use<ILoop> loop, FileOsType file, double atime,
+		double mtime, use<FsCallback> cb){
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_futime(as_uv_type(loop), as_uv_type(ret), file,atime,mtime, ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+	static use<IFsRequest> LstatRaw(use<ILoop> loop, cr_string path, use<FsCallback>cb){
+			assure_null_terminated(path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_lstat(as_uv_type(loop), as_uv_type(ret), path.data(), ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+	static use<IFsRequest> LinkRaw(use<ILoop> loop, cr_string path, cr_string new_path,
+		use<FsCallback> cb){
+			assure_null_terminated(path);
+			assure_null_terminated(new_path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_link(as_uv_type(loop), as_uv_type(ret), path.data(),new_path.data(), ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+
+	static use<IFsRequest> SymlinkRaw(use<ILoop> loop, cr_string path,
+		cr_string new_path, int flags, use<FsCallback> cb){
+			assure_null_terminated(path);
+			assure_null_terminated(new_path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_symlink(as_uv_type(loop), as_uv_type(ret), path.data(),new_path.data(),flags, ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+	static use<IFsRequest> ReadlinkRaw(use<ILoop>loop, cr_string path, use<FsCallback> cb){
+			assure_null_terminated(path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_readlink(as_uv_type(loop), as_uv_type(ret), path.data(), ImpFsRequest::RequestCb));
+			return ret;
+
+
+
+	}
+
+	static use<IFsRequest> FchmodRaw(use<ILoop> loop, FileOsType file,
+		int mode, use<FsCallback> cb){
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_fchmod(as_uv_type(loop), as_uv_type(ret), file,mode, ImpFsRequest::RequestCb));
+			return ret;
+	}
+
+	static use<IFsRequest> ChownRaw(use<ILoop> loop, cr_string path, unsigned char uid,
+		unsigned char gid, use<FsCallback> cb){
+			assure_null_terminated(path);
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_chown(as_uv_type(loop), as_uv_type(ret), path.data(),uid,gid, ImpFsRequest::RequestCb));
+			return ret;
+	}
+
+	static use<IFsRequest> FchownRaw(use<ILoop> loop, FileOsType file, unsigned char uid,
+		unsigned char gid, use<FsCallback> cb){
+			auto ret = ImpFsRequest::create(cb, loop).QueryInterface<IFsRequest>();
+			throw_if_error(uv_fs_fchown(as_uv_type(loop), as_uv_type(ret), file,uid,gid,ImpFsRequest::RequestCb));
+			return ret;
+
+	}
+
+	ImpFsRaw(){}
+
+};
+
+struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<uv_fs_poll_t>, implement_runtime_class<ImpFsPoll, FsPoll_t>{
+	typedef ImpHandleBase<uv_fs_poll_t> imp_base_t;
+	use<FsPollCallback> cb_;
+	use<IFsPoll> self_;
+
+	static void PollCallbackRaw(uv_fs_poll_t* handle,int status,
+		const uv_stat_t* prev, const uv_stat_t* curr){
+		auto& imp = *static_cast<ImpFsPoll*>(handle);
+		static_assert(sizeof(cppcomponents_libuv::Stat)==sizeof(uv_stat_t),"Mismatch Stat, uv_stat_t");
+		imp.cb_(imp.QueryInterface<IFsPoll>(), status, reinterpret_cast<const Stat*>(prev),
+			reinterpret_cast<const Stat*>(curr));
+	}
+	void StartRaw(use<FsPollCallback> cb, cr_string path, unsigned int msinterval){
+		cb_ = cb;
+		self_ = this->QueryInterface<IFsPoll>();
+		try{
+			throw_if_error(uv_fs_poll_start(this, PollCallbackRaw, path.data(), msinterval));
+		}
+		catch (...){
+			cb_ = nullptr;
+			self_ = nullptr;
+			throw;
+		}
+	}
+	void Stop(){
+		self_ = nullptr;
+		throw_if_error(uv_fs_poll_stop(this));
+		cb_ = nullptr;
+	}
+
+	ImpFsPoll(use<ILoop> loop) : imp_base_t{ this }
+	{
+		throw_if_error(uv_fs_poll_init(as_uv_type(loop), this));
+	}
+
+	~ImpFsPoll(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+
+
+};
+
+
+struct ImpSignal :uv_signal_t,ImpHandleBase<uv_signal_t>, implement_runtime_class<ImpSignal, Signal_t>{
+	typedef ImpHandleBase<uv_signal_t> imp_base_t;
+
+	use<ISignal> self_;
+	use<SignalCallback> cb_;
+	static void SignalCallbackRaw(uv_signal_t* handle, int signum){
+		auto& imp = *static_cast<ImpSignal*>(handle);
+		imp.cb_(imp.QueryInterface<ISignal>(), signum);
+	}
+	void StartRaw(use<SignalCallback> cb, int signum){
+		cb_ = cb;
+		self_ = this->QueryInterface<ISignal>();
+		try{
+			throw_if_error(uv_signal_start(this, SignalCallbackRaw, signum));
+		}
+		catch (...){
+			cb_ = nullptr;
+			self_ = nullptr;
+			throw;
+		}
+	}
+	void Stop(){
+		self_ = nullptr;
+		throw_if_error(uv_signal_stop(this));
+		cb_ = nullptr;
+
+	}
+	ImpSignal(use<ILoop> loop) : imp_base_t{ this }
+	{
+		throw_if_error(uv_signal_init(as_uv_type(loop), this));
+	}
+
+	~ImpSignal(){
+		if (!this->closed()){
+			uv_close(this->handle_, nullptr);
+		}
+	}
+
+
+};
+
+
+struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<uv_fs_event_t>
+	, implement_runtime_class<ImpFsEvent, FsEvent_t>{
+
+		typedef ImpHandleBase<uv_fs_event_t> imp_base_t;
+
+
+		use<FsEventCallback> cb_;
+		static void FsEventCallbackRaw(uv_fs_event_t* handle, const char* filename,
+			int events, int status){
+				auto& imp = *static_cast<ImpFsEvent*>(handle);
+				cr_string fname(filename);
+				imp.cb_(imp.QueryInterface<IFsEvent>(), fname,events,status);
+
+		}
+
+		ImpFsEvent(use<ILoop> loop, cr_string filename, use<FsEventCallback> cb, int flags)
+			:imp_base_t{this}
+		{
+			assure_null_terminated(filename);
+			cb_ = cb;
+			throw_if_error(uv_fs_event_init(as_uv_type(loop), this, filename.data(), FsEventCallbackRaw, flags));
+		}
+		
+		~ImpFsEvent(){
+			if (!this->closed()){
+				uv_close(this->handle_, nullptr);
+			}
+		}
+
+
+};
+
+CPPCOMPONENTS_DEFINE_FACTORY();
+
