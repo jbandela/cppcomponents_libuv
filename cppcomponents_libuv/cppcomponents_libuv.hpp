@@ -162,6 +162,9 @@ namespace cppcomponents_libuv{
 
  }
 
+#include "implementation/errors.hpp"
+#include "implementation/constants.hpp"
+
  namespace cppcomponents{
 	 template<>
 	 struct uuid_of<cppcomponents_libuv::Buffer>
