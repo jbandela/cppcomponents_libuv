@@ -1993,5 +1993,62 @@ struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<uv_fs_event_t>
 
 };
 
+struct ImpMutex : implement_runtime_class<ImpMutex, Mutex_t>{
+	uv_mutex_t mut_;
+	
+	void Lock(){
+		uv_mutex_lock(&mut_);
+	}
+	bool Trylock(){
+		return uv_mutex_trylock(&mut_)==0;
+	}
+	void Unlock(){
+		uv_mutex_unlock(&mut_);
+	}
+	void* UvHandle(){
+		return &mut_;
+	}
+
+	ImpMutex(){
+		throw_if_error(uv_mutex_init(&mut_));
+	}
+
+	~ImpMutex(){
+		uv_mutex_destroy(&mut_);
+	}
+};
+
+struct ImpRwlock : implement_runtime_class<ImpRwlock, Rwlock_t>{
+
+	uv_rwlock_t h_;
+
+	void Rdlock(){
+		uv_rwlock_rdlock(&h_);
+	}
+	bool Tryrdlock(){
+		return uv_rwlock_rdlock(&h) == 0;
+	}
+	void Rdunlock(){
+		uv_rwlock_rdunlock(&h_);
+	}
+	void Wrlock(){
+		uv_rwlock_wrlock(&h_);
+	}
+	bool Trywrlock(){
+		return uv_rwlock_trywrlock(&h_) == 0;
+	}
+	void Wrunlock(){
+		uv_rwlock_wrunlock(&h_);
+	}
+
+	ImpRwlock(){
+		throw_if_error(uv_rwlock_init(&h_));
+	}
+
+	~ImpRwlock(){
+		uv_rwlock_destroy(&h_);
+	}
+};
+
 CPPCOMPONENTS_DEFINE_FACTORY();
 
