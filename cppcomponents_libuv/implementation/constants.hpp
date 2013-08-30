@@ -1,7 +1,7 @@
 namespace cppcomponents_libuv{
 	namespace Constants{
 	namespace Membership{
-		typedef enum {
+		enum {
 			LeaveGroup = 0,
 			JoinGroup
 		};
@@ -25,7 +25,7 @@ namespace cppcomponents_libuv{
 	};
 	}
 	namespace StdioFlags{
-		typedef enum {
+		enum {
 			Ignore = 0x00,
 			CreatePipe = 0x01,
 			InheritFd = 0x02,
@@ -78,7 +78,7 @@ namespace cppcomponents_libuv{
 	}
 
 	namespace FsType{
-	typedef enum {
+	enum {
 		Unknown = -1,
 		Custom,
 		Open,

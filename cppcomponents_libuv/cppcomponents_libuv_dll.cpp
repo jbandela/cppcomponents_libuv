@@ -403,6 +403,7 @@ struct ImpHandleBase{
 
 	uv_handle_t* handle_;
 	bool closed_;
+	
 
 	HType* get(){
 		return reinterpret_cast<HType*>(handle_);
@@ -422,7 +423,7 @@ struct ImpHandleBase{
 	static void CloseCallbackRaw(uv_handle_t *h){
 		use<CloseCallback> cb(cppcomponents::reinterpret_portable_base<CloseCallback>(static_cast<portable_base*>(h->data)),false);
 		h->data = nullptr;
-		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
+		cb();
 	}
 
 	bool closed(){ return closed_; }
@@ -572,7 +573,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
-		return ImpShutdownRequest::create(cb, is).QueryInterface<IShutdownRequest>();
+		return ImpShutdownRequest::create(cb, is).template QueryInterface<IShutdownRequest>();
 	}
 
 	static void ConnectionCallbackRaw(uv_stream_t* server, int status){
@@ -667,7 +668,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	use<IWriteRequest> Write(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
 		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
-		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->QueryInterface<clv::IStream>()).QueryInterface<IWriteRequest>();
+		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->template QueryInterface<clv::IStream>()).template QueryInterface<IWriteRequest>();
 		throw_if_error(uv_write(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
 			ImpWriteRequest::RequestCb));
 
@@ -676,7 +677,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	}	
 	use<IWriteRequest> Write2(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
 		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
-		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->QueryInterface<clv::IStream>()).QueryInterface<IWriteRequest>();;
+		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->template QueryInterface<clv::IStream>()).template QueryInterface<IWriteRequest>();;
 		throw_if_error(uv_write2(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
 			as_uv_type(is),ImpWriteRequest::RequestCb));
 		return wr;

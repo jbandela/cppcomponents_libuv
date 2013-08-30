@@ -37,7 +37,10 @@ namespace cppcomponents_libuv{
 
 }
 #else
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -231,143 +234,104 @@ namespace cppcomponents_libuv{
 
 	// Requests
 
-	struct IRequest;
-	struct IGetAddrinfoRequest;
-	struct IShutdownRequest;
-	struct IWriteRequest;
-	struct IConnectRequest;
-	struct IUdpSendRequest;
-	struct IFsRequest;
-	struct IWorkRequest;
+	//struct IRequest;
+	//struct IGetAddrinfoRequest;
+	//struct IShutdownRequest;
+	//struct IWriteRequest;
+	//struct IConnectRequest;
+	//struct IUdpSendRequest;
+	//struct IFsRequest;
+	//struct IWorkRequest;
 
 
-	// Handles
-	struct ILoop ;
-	struct IHandle ;
-	struct IStream ;
-	struct ITcpStream ;
-	struct IUdpStream ;
-	struct IPipe ;
-	struct ITty ;
-	struct IPoll ;
-	struct ITimer ;
-	struct IPrepare ;
-	struct ICheck ;
-	struct IIdle ;
-	struct IAsync ;
-	struct IProcess ;
-	struct IFsEvent ;
-	struct IFsPoll ;
-	struct ISignal ;
+	//// Handles
+	//struct ILoop ;
+	//struct IHandle ;
+	//struct IStream ;
+	//struct ITcpStream ;
+	//struct IUdpStream ;
+	//struct IPipe ;
+	//struct ITty ;
+	//struct IPoll ;
+	//struct ITimer ;
+	//struct IPrepare ;
+	//struct ICheck ;
+	//struct IIdle ;
+	//struct IAsync ;
+	//struct IProcess ;
+	//struct IFsEvent ;
+	//struct IFsPoll ;
+	//struct ISignal ;
 
+
+	struct IHandle
+		: cppcomponents::define_interface < cppcomponents::uuid <
+		0xdeb1580e, 0x08e2, 0x4f67, 0xa03c, 0x90d155bb04be
+		>>
+	{
+		typedef cppcomponents::delegate < void(),
+			cppcomponents::uuid<0x5287f549, 0x9b31, 0x4707, 0x93d0, 0xf0ac3fec8b45>
+		> CloseCallback;
+
+
+		int HandleType();
+		bool IsActive();
+		void Close(cppcomponents::use<CloseCallback>);
+		void Ref();
+		void Unref();
+		bool HasRef();
+		bool IsClosing();
+		void* UvHandle();
+
+
+		CPPCOMPONENTS_CONSTRUCT(IHandle, HandleType, IsActive, Close, Ref, Unref, HasRef, IsClosing, UvHandle);
+	};
+
+	typedef IHandle::CloseCallback CloseCallback;
 
 	// Callbacks
 	typedef cppcomponents::delegate < Buffer(use<IHandle> handle, std::ptrdiff_t suggested_size),
 		cppcomponents::uuid<0x3298fd84, 0xe097, 0x4fc5, 0x9b28, 0x60e1f5e5d0c8	>
 	> AllocCallback;
 
-	typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t, Buffer),
-		cppcomponents::uuid<0x38df861d, 0x421b, 0x43d1, 0xb081, 0x7d2ad030c44c		>
-	> ReadCallback;
-
-	typedef cppcomponents::delegate < void(use<IStream> pipe, std::ptrdiff_t nread, Buffer buf,
-		int pending),
-		cppcomponents::uuid<0xd4efdca8, 0xc398, 0x465a, 0x8812, 0x653250b6cdb4		>
-	> Read2Callback;
-
-	typedef cppcomponents::delegate < void(use<IWriteRequest>, int status), 
-		cppcomponents::uuid<0x1c150cb2, 0xde88, 0x46cf, 0xbfad, 0xeb6ede7611ed> 
-	> WriteCallback;
-
-	typedef cppcomponents::delegate < void(use<IConnectRequest>, int),
-		cppcomponents::uuid<0x51a43254, 0x1c9b, 0x462e, 0xacc3, 0xecb908249e95> 
-	> ConnectCallback;
-
-	typedef cppcomponents::delegate < void(use<IShutdownRequest>, int),
-		cppcomponents::uuid<0x121276b6, 0x4d00, 0x4db3, 0xb0e2, 0xbf761a031162>
-	> ShutdownCallback;
-
-	typedef cppcomponents::delegate < void(use<IStream>, int),
-		cppcomponents::uuid<0x2965d620, 0xac78, 0x4f07, 0xb10b, 0x748401d69656>
-	> ConnectionCallback;
-
-	typedef cppcomponents::delegate < void(use<IHandle> handle),
-		cppcomponents::uuid<0x5287f549, 0x9b31, 0x4707, 0x93d0, 0xf0ac3fec8b45>
-	> CloseCallback;
-
-	typedef cppcomponents::delegate < void(use<IPoll>,int status, int events),
-		cppcomponents::uuid<0x1679860e, 0x3e67, 0x4b1b, 0x8791, 0x18080f1df647> 
-	> PollCallback;
-
-	typedef cppcomponents::delegate < void(use<ITimer>, int status),
-		cppcomponents::uuid<0xccecc946, 0x1bcd, 0x48c8, 0x818a, 0xbd90445eee11	> 
-	> TimerCallback;
-
-	typedef cppcomponents::delegate < void(use<IAsync>, int status),
-		cppcomponents::uuid<0x5259a184, 0x0903, 0x4694, 0xbb4c, 0xa83f241b10da>
-	> AsyncCallback;
-
-	typedef cppcomponents::delegate < void(use<IPrepare>, int status),
-		cppcomponents::uuid<0x66854dad, 0x0408, 0x4c4e, 0xafcd, 0x5a2fe7366914>
-	> PrepareCallback;
-
-	typedef cppcomponents::delegate < void(use<ICheck>, int status),
-		cppcomponents::uuid<0x5817e0e6, 0x31c8, 0x40ab, 0xbce5, 0x6913db56a285>
-	> CheckCallback;
-
-	typedef cppcomponents::delegate < void(use<IIdle>, int status),
-		cppcomponents::uuid<0x05727499, 0xcc1d, 0x4170, 0xa88c, 0xe31f8d014778>
-	> IdleCallback;
-
-	typedef cppcomponents::delegate < void(use<IProcess>, int status, int term_signal),
-		cppcomponents::uuid<0xa585d683, 0x22eb, 0x453d, 0xbcc4, 0x79d4c328afb1>
-	> ExitCallback;
-
-	typedef cppcomponents::delegate < void(use<IHandle>),
-		cppcomponents::uuid<0x6b443ec5, 0x32ca, 0x4d3d, 0x99e0, 0xb2b1a33c3111>
-	> WalkCallback;
-
-	typedef cppcomponents::delegate < void(use<IFsRequest>),
-		cppcomponents::uuid<0x51cc28e9, 0xb06d, 0x49e9, 0x85c4, 0x008a37780ea9>
-	> FsCallback;
-
-	typedef cppcomponents::delegate < void(use<IWorkRequest>),
-		cppcomponents::uuid<0x00387da7, 0x2931, 0x4f8f, 0xaa6e, 0x66afb7c0c4a0>
-	> WorkCallback;
-
-	typedef cppcomponents::delegate < void(use<IWorkRequest>, int status),
-		cppcomponents::uuid<0xf2cd0ccb, 0x3307, 0x438c, 0x8e7b, 0x4b52f563129a>
-	> AfterWorkCallback;
-
-	typedef cppcomponents::delegate < void (use<IGetAddrinfoRequest>, int status, addrinfo* res),
-		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
-	> GetAddrinfoCallback;
 
 
 
-	typedef cppcomponents::delegate < void(use<IFsEvent>, cr_string filename,
-		int events, int status),
-		cppcomponents::uuid<0x42ea1b10, 0x261c, 0x4478, 0x89bb, 0x5203b1ff344a>
-	> FsEventCallback;
-
-	typedef cppcomponents::delegate < void(use<IFsPoll>, 
-		int status, const Stat* prev, const Stat* curr),
-		cppcomponents::uuid<0xb64e98a1, 0xc2a9, 0x4e5f, 0x9bd9, 0x93d0b2913f97>
-	> FsPollCallback;
-
-	typedef cppcomponents::delegate < void(use<IUdpSendRequest>, int status),
-		cppcomponents::uuid<0x5f2d1356, 0x7025, 0x4459, 0xb843, 0x9610a57f79be>
-	> UdpSendCallback;
-
-	typedef cppcomponents::delegate < void (use<IUdpStream>, std::ptrdiff_t nread,
-		Buffer buf, sockaddr* addr, unsigned int flags),
-		cppcomponents::uuid<0x62a0f712, 0x99f5, 0x4a09, 0x9d00, 0x2ec1b2dd6cea>
-	> UdpRecvCallback;
 
 
-	typedef cppcomponents::delegate < void(use<ISignal>, int signum),
-		cppcomponents::uuid<0x320b624c, 0xa2c7, 0x4039, 0xb66e, 0xc7dd27b28a1c>
-	> SignalCallback;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	struct IRequest
 		: public cppcomponents::define_interface < cppcomponents::uuid < 0xd6d00c3e , 0x5a30 , 0x48c9 , 0x9f48 , 0x9f535bdc4af6	>>
@@ -382,101 +346,46 @@ namespace cppcomponents_libuv{
 	};
 
 
-	struct IShutdownRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0x54fdda53, 0xa752, 0x434b, 0x8103, 0xbf35351a3b22>,
-		IRequest>
-	{
-		cppcomponents::use<IStream> GetHandle();
-
-		CPPCOMPONENTS_CONSTRUCT(IShutdownRequest, GetHandle);
-	};
-
-	struct IWriteRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0xe3e326d2, 0x49ea, 0x4193, 0x9508, 0x108a95c8a29e> ,
-		IRequest>
-	{
-		cppcomponents::use<IStream> GetHandle();
-		cppcomponents::use<IStream> GetSendHandle();
-
-		CPPCOMPONENTS_CONSTRUCT(IWriteRequest, GetHandle, GetSendHandle);
-	};
-
-	struct IConnectRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0x29c0c28e, 0x5a17, 0x433a, 0xa06a, 0x1af0a2e98558>,
-		IRequest>
-	{
-		cppcomponents::use<IStream> GetHandle();
-
-		CPPCOMPONENTS_CONSTRUCT(IConnectRequest, GetHandle);
-	};
-	struct IUdpSendRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0xc838dab9, 0x8815, 0x4592, 0x84f4, 0x3574ea72db0d>,
-		IRequest>
-	{
-		cppcomponents::use<IStream> GetHandle();
-
-		CPPCOMPONENTS_CONSTRUCT(IUdpSendRequest, GetHandle);
-	};
-
-
-	struct IGetAddrinfoRequest 
-		: public cppcomponents::define_interface < cppcomponents::uuid<0x9c3fbcb4, 0xa35e, 0x4486, 0x9377, 0xedb1262e5f6e>,
-		IRequest>
-	{
-		cppcomponents::use<ILoop> GetLoop();
-
-		CPPCOMPONENTS_CONSTRUCT(IGetAddrinfoRequest, GetLoop);
-	};
-
-	struct IWorkRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0xb2466973, 0xc746, 0x4730, 0x9c7b, 0x944b60607e11>,
-		IRequest>
-	{
-		cppcomponents::use<ILoop> GetLoop();
-
-		CPPCOMPONENTS_CONSTRUCT(IWorkRequest, GetLoop);
-	};
-
-	struct IFsRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0x50d9617d, 0xf3e2, 0x4c2a, 0x909f, 0x65c810fa3340>,
-		IRequest>
-	{
-		void Cleanup();
-		cppcomponents::use<ILoop> GetLoop();
-		std::ptrdiff_t GetResult();
-		void* GetPtr();
-		cppcomponents::cr_string GetPath();
-		Stat GetStatBuf();
-
-
-		CPPCOMPONENTS_CONSTRUCT(IFsRequest,Cleanup, GetLoop,GetResult,GetPtr,GetPath,GetStatBuf);
-	};
 
 
 
 
-	struct IHandle
-		: cppcomponents::define_interface<cppcomponents::uuid<
-		0xdeb1580e , 0x08e2 , 0x4f67 , 0xa03c , 0x90d155bb04be
-		>>
-	{
-		int HandleType();
-		bool IsActive();
-		void Close(cppcomponents::use<CloseCallback>);
-		void Ref();
-		void Unref();
-		bool HasRef();
-		bool IsClosing();
-		void* UvHandle();
 
 
-		CPPCOMPONENTS_CONSTRUCT(IHandle, HandleType,IsActive,Close,Ref,Unref,HasRef,IsClosing,UvHandle);
-	};
+
+
+
+
+
+
+
+
 
 
 	struct ILoop
 		: cppcomponents::define_interface < cppcomponents::uuid < 0xfc3c5e3c , 0x10af , 0x47a3 , 0x89fc , 0xdaea39cb9d58>>
 	{
+		struct IWorkRequest
+			: public cppcomponents::define_interface < cppcomponents::uuid<0xb2466973, 0xc746, 0x4730, 0x9c7b, 0x944b60607e11>,
+			IRequest>
+		{
+			cppcomponents::use<ILoop> GetLoop();
+
+			CPPCOMPONENTS_CONSTRUCT(IWorkRequest, GetLoop);
+		};
+
+		typedef cppcomponents::delegate < void(use<IWorkRequest>),
+			cppcomponents::uuid<0x00387da7, 0x2931, 0x4f8f, 0xaa6e, 0x66afb7c0c4a0>
+		> WorkCallback;
+
+		typedef cppcomponents::delegate < void(use<IWorkRequest>, int status),
+			cppcomponents::uuid<0xf2cd0ccb, 0x3307, 0x438c, 0x8e7b, 0x4b52f563129a>
+		> AfterWorkCallback;
+
+		typedef cppcomponents::delegate < void(use<IHandle>),
+			cppcomponents::uuid<0x6b443ec5, 0x32ca, 0x4d3d, 0x99e0, 0xb2b1a33c3111>
+		> WalkCallback;
+
 		void Run();
 		void RunOnce();
 		void RunNoWait();
@@ -518,6 +427,13 @@ namespace cppcomponents_libuv{
 		};
 	};
 
+	typedef ILoop::IWorkRequest IWorkRequest;
+	typedef ILoop::WalkCallback WalkCallback;
+	typedef ILoop::WorkCallback WorkCallback;
+	typedef ILoop::AfterWorkCallback AfterWorkCallback;
+
+
+
 	struct ILoopStatics
 		: cppcomponents::define_interface < cppcomponents::uuid < 0xd84fa990, 0xccb8, 0x4480, 0x8a3c, 0xb494ef8d79a0>>
 	{
@@ -539,6 +455,48 @@ namespace cppcomponents_libuv{
 		0x9b7c72d8 , 0xb955 , 0x4163 , 0x9e1f , 0x0c905b60c58f
 		>,IHandle>
 	{
+		struct IWriteRequest
+			: public cppcomponents::define_interface < cppcomponents::uuid<0xe3e326d2, 0x49ea, 0x4193, 0x9508, 0x108a95c8a29e>,
+			IRequest>
+		{
+			cppcomponents::use<IStream> GetHandle();
+			cppcomponents::use<IStream> GetSendHandle();
+
+			CPPCOMPONENTS_CONSTRUCT(IWriteRequest, GetHandle, GetSendHandle);
+		};
+
+		struct IShutdownRequest
+			: public cppcomponents::define_interface < cppcomponents::uuid<0x54fdda53, 0xa752, 0x434b, 0x8103, 0xbf35351a3b22>,
+			IRequest>
+		{
+			cppcomponents::use<IStream> GetHandle();
+
+			CPPCOMPONENTS_CONSTRUCT(IShutdownRequest, GetHandle);
+		};
+
+		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t, Buffer),
+			cppcomponents::uuid<0x38df861d, 0x421b, 0x43d1, 0xb081, 0x7d2ad030c44c		>
+		> ReadCallback;
+
+		typedef cppcomponents::delegate < void(use<IStream> pipe, std::ptrdiff_t nread, Buffer buf,
+			int pending),
+			cppcomponents::uuid<0xd4efdca8, 0xc398, 0x465a, 0x8812, 0x653250b6cdb4		>
+		> Read2Callback;
+
+		typedef cppcomponents::delegate < void(use<IWriteRequest>, int status),
+			cppcomponents::uuid<0x1c150cb2, 0xde88, 0x46cf, 0xbfad, 0xeb6ede7611ed>
+		> WriteCallback;
+		typedef cppcomponents::delegate < void(use<IShutdownRequest>, int),
+			cppcomponents::uuid<0x121276b6, 0x4d00, 0x4db3, 0xb0e2, 0xbf761a031162>
+		> ShutdownCallback;
+
+
+		typedef cppcomponents::delegate < void(use<IStream>, int),
+			cppcomponents::uuid<0x2965d620, 0xac78, 0x4f07, 0xb10b, 0x748401d69656>
+		> ConnectionCallback;
+
+
+
 		use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback>);
 		void Listen(int backlog, cppcomponents::use<ConnectionCallback>);
 		void Accept(use<IStream> client);
@@ -560,12 +518,32 @@ namespace cppcomponents_libuv{
 
 	};
 
+	typedef IStream::ReadCallback ReadCallback;
+	typedef IStream::Read2Callback Read2Callback;
+	typedef IStream::WriteCallback WriteCallback;
+	typedef IStream::ConnectionCallback ConnectionCallback;
+	typedef IStream::ShutdownCallback ShutdownCallback;
+	typedef IStream::IWriteRequest IWriteRequest;
+	typedef IStream::IShutdownRequest IShutdownRequest;
 
 	struct ITcpStream
 		: public cppcomponents::define_interface < cppcomponents::uuid <
 		0x7e57d378 , 0xa97c , 0x463d , 0xb153 , 0xd7c414ab4c59
 		>,IStream>
 	{
+		struct IConnectRequest
+			: public cppcomponents::define_interface < cppcomponents::uuid<0x29c0c28e, 0x5a17, 0x433a, 0xa06a, 0x1af0a2e98558>,
+			IRequest>
+		{
+			cppcomponents::use<IStream> GetHandle();
+
+			CPPCOMPONENTS_CONSTRUCT(IConnectRequest, GetHandle);
+		};
+
+		typedef cppcomponents::delegate < void(use<IConnectRequest>, int),
+			cppcomponents::uuid<0x51a43254, 0x1c9b, 0x462e, 0xacc3, 0xecb908249e95>
+		> ConnectCallback;
+
 		void Open(SocketOsType sock);
 		void NoDelay(bool enable);
 		void KeepAlive(bool enable, std::uint32_t delay);
@@ -580,6 +558,9 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(ITcpStream, Open,NoDelay,KeepAlive,SimultaneousAccepts,
 			Bind,Bind6,Getsockname,Getpeername,Connect,Connect6);
 	};
+
+	typedef ITcpStream::ConnectCallback ConnectCallback;
+	typedef ITcpStream::IConnectRequest IConnectRequest;
 
 	struct ILoopInitFactory
 		: public cppcomponents::define_interface <
@@ -600,6 +581,25 @@ namespace cppcomponents_libuv{
 		0x2c4a1e5e , 0x4362 , 0x45db , 0xb8d6 , 0xac71c6810066
 		> , IStream >
 	{
+		struct IUdpSendRequest
+			: public cppcomponents::define_interface < cppcomponents::uuid<0xc838dab9, 0x8815, 0x4592, 0x84f4, 0x3574ea72db0d>,
+			IRequest>
+		{
+			cppcomponents::use<IStream> GetHandle();
+
+			CPPCOMPONENTS_CONSTRUCT(IUdpSendRequest, GetHandle);
+		};
+
+		typedef cppcomponents::delegate < void(use<IUdpSendRequest>, int status),
+			cppcomponents::uuid<0x5f2d1356, 0x7025, 0x4459, 0xb843, 0x9610a57f79be>
+		> UdpSendCallback;
+
+		typedef cppcomponents::delegate < void (use<IUdpStream>, std::ptrdiff_t nread,
+			Buffer buf, sockaddr* addr, unsigned int flags),
+			cppcomponents::uuid<0x62a0f712, 0x99f5, 0x4a09, 0x9d00, 0x2ec1b2dd6cea>
+		> UdpRecvCallback;
+
+
 		void Open(SocketOsType sock);
 		void Bind(sockaddr_in in, std::uint32_t flags);
 		void Bind6(sockaddr_in6 in, std::uint32_t flags);
@@ -622,6 +622,9 @@ namespace cppcomponents_libuv{
 			SetMulticastLoop,SetMulticastTtl,SetBroadcast,SetTtl,Send,Send6,RecvStart,RecvStop);
 	};
 
+	typedef IUdpStream::IUdpSendRequest IUdpSendRequest;
+	typedef IUdpStream::UdpSendCallback UdpSendCallback;
+	typedef IUdpStream::UdpRecvCallback UdpRecvCallback;
 
 	inline std::string UdpStreamId(){ return "cppcomponents_libuv_dll!UdpStream"; }
 	typedef runtime_class<UdpStreamId, object_interfaces<IUdpStream>, factory_interface<ILoopInitFactory>> UdpStream_t;
@@ -700,12 +703,18 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xa7f582ac , 0x8b78 , 0x4988 , 0xad12 , 0x7074bbde7e27>,
 		IHandle >
 	{
+		typedef cppcomponents::delegate < void(use<IPoll>, int status, int events),
+			cppcomponents::uuid<0x1679860e, 0x3e67, 0x4b1b, 0x8791, 0x18080f1df647>
+		> PollCallback;
+
 		void Start(int events, cppcomponents::use<PollCallback>);
 		void Stop();
 
 		CPPCOMPONENTS_CONSTRUCT(IPoll, Start,Stop);
 
 	};
+
+	typedef IPoll::PollCallback PollCallback;
 
 	struct IPollFactory
 		: public cppcomponents::define_interface <
@@ -728,13 +737,17 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xc15bdb50 , 0x4fc6 , 0x4224 , 0x984d , 0x4a9e57f3d7ee		>,
 		IHandle >
 	{
+		typedef cppcomponents::delegate < void(use<IPrepare>, int status),
+			cppcomponents::uuid<0x66854dad, 0x0408, 0x4c4e, 0xafcd, 0x5a2fe7366914>
+		> PrepareCallback;
+
 		void Start(cppcomponents::use<PrepareCallback>);
 		void Stop();
 
 		CPPCOMPONENTS_CONSTRUCT(IPrepare, Start, Stop);
 	};
 
-
+	typedef IPrepare::PrepareCallback PrepareCallback;
 
 	inline std::string PrepareId(){ return "cppcomponents_libuv_dll!Prepare"; }
 	typedef runtime_class < PrepareId, object_interfaces<IPrepare>, factory_interface<ILoopInitFactory>> Prepare_t;
@@ -746,11 +759,17 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0x313b4d56 , 0x1def , 0x431d , 0x84fb , 0x48556b725e20		>,
 		IHandle >
 	{
+		typedef cppcomponents::delegate < void(use<ICheck>, int status),
+			cppcomponents::uuid<0x5817e0e6, 0x31c8, 0x40ab, 0xbce5, 0x6913db56a285>
+		> CheckCallback;
+
 		void Start(cppcomponents::use<CheckCallback>);
 		void Stop();
 
 		CPPCOMPONENTS_CONSTRUCT(ICheck, Start, Stop);
 	};
+
+	typedef ICheck::CheckCallback CheckCallback;
 
 	inline std::string CheckId(){ return "cppcomponents_libuv_dll!Check"; }
 	typedef runtime_class<CheckId, object_interfaces<ICheck>, factory_interface<ILoopInitFactory>> Check_t;
@@ -762,11 +781,17 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xdc2333a3 , 0xa2c8 , 0x47c4 , 0xbfde , 0xee062553c8df>,
 		IHandle >
 	{
+		typedef cppcomponents::delegate < void(use<IIdle>, int status),
+			cppcomponents::uuid<0x05727499, 0xcc1d, 0x4170, 0xa88c, 0xe31f8d014778>
+		> IdleCallback;
+
 		void Start(cppcomponents::use<IdleCallback>);
 		void Stop();
 
 		CPPCOMPONENTS_CONSTRUCT(IIdle, Start, Stop);
 	};	
+
+	typedef IIdle::IdleCallback IdleCallback;
 
 	inline std::string IdleId(){ return "cppcomponents_libuv_dll!Idle"; }
 	typedef runtime_class<IdleId, object_interfaces<IIdle>, factory_interface<ILoopInitFactory>> Idle_t;
@@ -781,6 +806,11 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IAsync,Send);
 	};
+
+	typedef cppcomponents::delegate < void(use<IAsync>, int status),
+		cppcomponents::uuid<0x5259a184, 0x0903, 0x4694, 0xbb4c, 0xa83f241b10da>
+	> AsyncCallback;
+
 	struct IAsyncFactory
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid <0x2d5db39d , 0x52df , 0x4900 , 0xa60f , 0x48c3fcc8b154	> >
@@ -789,6 +819,8 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IAsyncFactory, Init);
 	};
+
+
 
 	inline std::string AsyncId(){ return "cppcomponents_libuv_dll!Async"; }
 	typedef runtime_class<AsyncId, object_interfaces<IAsync>, factory_interface<IAsyncFactory>> Async_t;
@@ -800,6 +832,10 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0x5f941871 , 0x8e16 , 0x4c21 , 0xbec6 , 0x33ee71c66afb>,
 		IHandle >
 	{
+		typedef cppcomponents::delegate < void(use<ITimer>, int status),
+			cppcomponents::uuid<0xccecc946, 0x1bcd, 0x48c8, 0x818a, 0xbd90445eee11	>
+		> TimerCallback;
+
 		void Start(cppcomponents::use<TimerCallback>,std::uint64_t timeout, std::uint64_t repeat);
 		void Stop();
 		void Again();
@@ -809,6 +845,7 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(ITimer,Start,Stop,Again,SetRepeat,GetRepeat);
 	};
 
+	typedef ITimer::TimerCallback TimerCallback;
 
 	struct ITimerFactory
 		: public cppcomponents::define_interface <
@@ -863,6 +900,19 @@ namespace cppcomponents_libuv{
 	typedef cppcomponents::runtime_class<InterfaceAddressId, cppcomponents::object_interfaces<IInterfaceAddress>,
 		cppcomponents::factory_interface < cppcomponents::NoConstructorFactoryInterface >>
 		InterfaceAddress_t;
+
+	struct IGetAddrinfoRequest
+		: public cppcomponents::define_interface < cppcomponents::uuid<0x9c3fbcb4, 0xa35e, 0x4486, 0x9377, 0xedb1262e5f6e>,
+		IRequest>
+	{
+		cppcomponents::use<ILoop> GetLoop();
+
+		CPPCOMPONENTS_CONSTRUCT(IGetAddrinfoRequest, GetLoop);
+	};
+
+	typedef cppcomponents::delegate < void (use<IGetAddrinfoRequest>, int status, addrinfo* res),
+		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
+	> GetAddrinfoCallback;
 
 	struct IUvStatics
 		: cppcomponents::define_interface < cppcomponents::uuid < 0x92979519, 0x8fe7, 0x42cf, 0x8916, 0x6e6e66b46d4a	>>
@@ -954,8 +1004,27 @@ namespace cppcomponents_libuv{
 	typedef use_runtime_class<StdioContainer_t> StdioContainer;
 
 
+
+
+	struct IProcess 
+		:public cppcomponents::define_interface < 
+		cppcomponents::uuid<0xee9c7f5b , 0x3be6 , 0x4a40 , 0xa689 , 0xa4bd7bbc4f4d	>,
+		IHandle>
+	{
+
+
+		void Kill(int signum);
+		int GetPid();
+		CPPCOMPONENTS_CONSTRUCT(IProcess, Kill,GetPid);
+	};
+
+
+	typedef cppcomponents::delegate < void(use<IProcess>, int status, int term_signal),
+		cppcomponents::uuid<0xa585d683, 0x22eb, 0x453d, 0xbcc4, 0x79d4c328afb1>
+	> ExitCallback;
+
 	struct IProcessOptions
-		: public cppcomponents::define_interface < cppcomponents::uuid < 0x18b90130 , 0x2ea2 , 0x4c21 , 0x934b , 0xf79cf31c7242	>>
+		: public cppcomponents::define_interface < cppcomponents::uuid < 0x18b90130, 0x2ea2, 0x4c21, 0x934b, 0xf79cf31c7242	>>
 	{
 		void SetExitCallback(cppcomponents::use<ExitCallback>);
 		cppcomponents::use<ExitCallback> GetExitCallback();
@@ -970,12 +1039,12 @@ namespace cppcomponents_libuv{
 		std::vector<cppcomponents::cr_string> GetEnv();
 
 		void SetCwd(cppcomponents::cr_string file);
-		std::string GetCwd();		
+		std::string GetCwd();
 
 		unsigned int GetFlags();
 		void SetFlags(unsigned int flags);
 
-		void SetStdio(std::vector<cppcomponents::use<IStdioContainer>>);
+		void SetStdio(std::vector < cppcomponents::use < IStdioContainer >> );
 		std::vector<cppcomponents::use<IStdioContainer>> GetStdio();
 
 		void SetUid(unsigned char);
@@ -993,16 +1062,6 @@ namespace cppcomponents_libuv{
 	inline std::string ProcessOptionsId(){ return "cppcomponents_libuv_dll!ProcessOptions"; }
 	typedef runtime_class<ProcessOptionsId, object_interfaces<IProcessOptions>> ProcessOptions_t;
 	typedef use_runtime_class<ProcessOptions_t> ProcessOptions;
-
-	struct IProcess 
-		:public cppcomponents::define_interface < 
-		cppcomponents::uuid<0xee9c7f5b , 0x3be6 , 0x4a40 , 0xa689 , 0xa4bd7bbc4f4d	>,
-		IHandle>
-	{
-		void Kill(int signum);
-		int GetPid();
-		CPPCOMPONENTS_CONSTRUCT(IProcess, Kill,GetPid);
-	};
 
 	struct IProcessFactory
 		: public cppcomponents::define_interface<
@@ -1027,6 +1086,24 @@ namespace cppcomponents_libuv{
 
 
 
+	struct IFsRequest
+		: public cppcomponents::define_interface < cppcomponents::uuid<0x50d9617d, 0xf3e2, 0x4c2a, 0x909f, 0x65c810fa3340>,
+		IRequest>
+	{
+		void Cleanup();
+		cppcomponents::use<ILoop> GetLoop();
+		std::ptrdiff_t GetResult();
+		void* GetPtr();
+		cppcomponents::cr_string GetPath();
+		Stat GetStatBuf();
+
+
+		CPPCOMPONENTS_CONSTRUCT(IFsRequest, Cleanup, GetLoop, GetResult, GetPtr, GetPath, GetStatBuf);
+	};
+
+	typedef cppcomponents::delegate < void(use<IFsRequest>),
+		cppcomponents::uuid<0x51cc28e9, 0xb06d, 0x49e9, 0x85c4, 0x008a37780ea9>
+	> FsCallback;
 
 
 
@@ -1105,10 +1182,17 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xff330521, 0x0c3e, 0x4c7b, 0x85fd, 0x7cfef3e71cb4 >>
 	{
+		typedef cppcomponents::delegate < void(use<IFsPoll>,
+			int status, const Stat* prev, const Stat* curr),
+			cppcomponents::uuid<0xb64e98a1, 0xc2a9, 0x4e5f, 0x9bd9, 0x93d0b2913f97>
+		> FsPollCallback;
+
 		void Start(use<FsPollCallback>, cr_string path, unsigned int msinterval);
 		void Stop();
 		CPPCOMPONENTS_CONSTRUCT(IFsPoll, Start, Stop);
 	};
+
+	typedef IFsPoll::FsPollCallback FsPollCallback;
 
 	struct IFsPollFactory
 		: public cppcomponents::define_interface <
@@ -1129,10 +1213,17 @@ namespace cppcomponents_libuv{
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xce633c27, 0xa8cb, 0x4752, 0xa7b9, 0x119924d606f0 >>
 	{
+		typedef cppcomponents::delegate < void(use<ISignal>, int signum),
+			cppcomponents::uuid<0x320b624c, 0xa2c7, 0x4039, 0xb66e, 0xc7dd27b28a1c>
+		> SignalCallback;
+
+
 		void Start(use<SignalCallback>, int signum );
 		void Stop();
 		CPPCOMPONENTS_CONSTRUCT(ISignal, Start, Stop);
 	};
+
+	typedef ISignal::SignalCallback SignalCallback;
 
 	struct ISignalFactory
 		: public cppcomponents::define_interface <
@@ -1153,13 +1244,22 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0xcd45427c, 0xed02, 0x408a, 0x83ae, 0xa2848df6b027>
 		, IHandle >
 	{
+		typedef cppcomponents::delegate < void(use<IFsEvent>, cr_string filename,
+			int events, int status),
+			cppcomponents::uuid<0x42ea1b10, 0x261c, 0x4478, 0x89bb, 0x5203b1ff344a>
+		> FsEventCallback;
+
 		CPPCOMPONENTS_CONSTRUCT_NO_METHODS(IFsEvent);
 	};
+
+	typedef IFsEvent::FsEventCallback FsEventCallback;
 
 	struct IFsEventFactory
 		: public cppcomponents::define_interface <
 		cppcomponents::uuid < 0xe59a4607, 0x6b30, 0x483d, 0x9743, 0x6a0d91102e51 >>
 	{
+
+
 		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>,cr_string filename,
 			use<FsEventCallback>, int flags);
 
@@ -1234,7 +1334,7 @@ namespace cppcomponents_libuv{
 		bool Trywait();
 
 		// Calls destroy in destructor
-		CPPCOMPONENTS_CONSTRUCT(ISemaphore, Lock, Trylock, Unlock);
+		CPPCOMPONENTS_CONSTRUCT(ISemaphore, Post, Wait, Trywait);
 	};
 
 	struct ISemaphoreFactory
