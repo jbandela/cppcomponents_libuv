@@ -4,6 +4,7 @@
 
 #include <cppcomponents/cppcomponents.hpp>
 #include <cppcomponents/events.hpp>
+#include <cppcomponents/future.hpp>
 
 // Define our buffer structure
 #if defined(__SVR4) && !defined(__unix__)
@@ -490,12 +491,31 @@ namespace cppcomponents_libuv{
 
 		void Walk(cppcomponents::use<WalkCallback>);
 
-		use<IWorkRequest> QueueWork(cppcomponents::use<WorkCallback>, cppcomponents::use<AfterWorkCallback>);
+		use<IWorkRequest> QueueWorkRaw(cppcomponents::use<WorkCallback>, cppcomponents::use<AfterWorkCallback>);
 
 
 		CPPCOMPONENTS_CONSTRUCT(ILoop, Run, RunOnce, RunNoWait,
 			Stop,UpdateTime,Now,BackendFd, BackendTimeout
-			,UvHandle,Walk,QueueWork);
+			,UvHandle,Walk,QueueWorkRaw);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ILoop){
+			template<class F>
+			cppcomponents::use<cppcomponents::IFuture<void>> QueueWork(F f){
+				using namespace cppcomponents;
+				auto p = cppcomponents::implement_future_promise<void>::create().QueryInterface<IPromise<void>>();
+				auto w = [f](cppcomponents::use<IWorkRequest>){f(); };
+				auto after = [p](cppcomponents::use<IWorkRequest>, int status){
+					if (status < 0){
+						p.SetError(status);
+					}
+					else{
+						p.Set();
+					}
+				};
+				this->get_interface().QueueWorkRaw(cppcomponents::make_delegate<WorkCallback>(w), cppcomponents::make_delegate<AfterWorkCallback>(after));
+				return p.QueryInterface<IFuture<void>>();
+			}
+		};
 	};
 
 	struct ILoopStatics

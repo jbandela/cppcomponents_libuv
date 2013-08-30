@@ -1,8 +1,3 @@
-#pragma comment(lib, "Ws2_32.lib")
-#pragma comment(lib, "Iphlpapi.lib")
-#pragma comment(lib, "Psapi.lib")
-
-
 #ifdef _MSC_VER
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
@@ -54,6 +49,12 @@ int main() {
 
 
 	printf("Idling...\n");
+
+	auto f = loop.QueueWork([](){printf("In Work\n"); });
+	f.Then([](cppcomponents::use < cppcomponents::IFuture < void >> f){
+		f.Get();
+		printf("Done with work\n");
+	});
 	loop.Run();
 
 	return 0;

@@ -1,3 +1,7 @@
+#pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Iphlpapi.lib")
+#pragma comment(lib, "Psapi.lib")
+
 #include "cppcomponents_libuv.hpp"
 #include <uv.h>
 
@@ -534,7 +538,7 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 		uv_walk(loop_, WalkCallbackRaw, cb.get_portable_base());
 	}
 
-	use<IWorkRequest> QueueWork(use<WorkCallback> wcb, use<AfterWorkCallback> awcb){
+	use<IWorkRequest> QueueWorkRaw(use<WorkCallback> wcb, use<AfterWorkCallback> awcb){
 		auto wr = ImpWorkRequest::create(wcb, awcb, this->QueryInterface<ILoop>()).QueryInterface<IWorkRequest>();
 		uv_queue_work(loop_, as_uv_type(wr),ImpWorkRequest::RequestCb,ImpWorkRequest::AfterRequestCb);
 		return wr;
