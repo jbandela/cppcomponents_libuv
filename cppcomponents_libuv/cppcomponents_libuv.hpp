@@ -5,6 +5,9 @@
 #include <cppcomponents/cppcomponents.hpp>
 #include <cppcomponents/events.hpp>
 #include <cppcomponents/future.hpp>
+#include <cppcomponents/channel.hpp>
+#include <cppcomponents/loop_executor.hpp>
+
 
 // Define our buffer structure
 #if defined(__SVR4) && !defined(__unix__)
@@ -276,7 +279,7 @@ namespace cppcomponents_libuv{
 
 		int HandleType();
 		bool IsActive();
-		void Close(cppcomponents::use<CloseCallback>);
+		void CloseRaw(cppcomponents::use<CloseCallback>);
 		void Ref();
 		void Unref();
 		bool HasRef();
@@ -284,7 +287,16 @@ namespace cppcomponents_libuv{
 		void* UvHandle();
 
 
-		CPPCOMPONENTS_CONSTRUCT(IHandle, HandleType, IsActive, Close, Ref, Unref, HasRef, IsClosing, UvHandle);
+		CPPCOMPONENTS_CONSTRUCT(IHandle, HandleType, IsActive, CloseRaw, Ref, Unref, HasRef, IsClosing, UvHandle);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IHandle){
+
+			template<class F>
+			void Close(F f){
+				this->get_interface().CloseRaw(cppcomponents::make_delegate<CloseCallback>(f));
+			}
+
+		};
 	};
 
 	typedef IHandle::CloseCallback CloseCallback;
@@ -398,16 +410,20 @@ namespace cppcomponents_libuv{
 
 		void* UvHandle();
 
-		void Walk(cppcomponents::use<WalkCallback>);
+		void WalkRaw(cppcomponents::use<WalkCallback>);
 
 		use<IWorkRequest> QueueWorkRaw(cppcomponents::use<WorkCallback>, cppcomponents::use<AfterWorkCallback>);
 
 
 		CPPCOMPONENTS_CONSTRUCT(ILoop, Run, RunOnce, RunNoWait,
 			Stop,UpdateTime,Now,BackendFd, BackendTimeout
-			,UvHandle,Walk,QueueWorkRaw);
+			,UvHandle,WalkRaw,QueueWorkRaw);
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(ILoop){
+			template<class F>
+			void Walk(F f){
+				this->get_interface().WalkRaw(cppcomponents::make_delegate<WalkCallback>(f));
+			}
 			template<class F>
 			cppcomponents::use<cppcomponents::IFuture<void>> QueueWork(F f){
 				using namespace cppcomponents;
@@ -445,10 +461,131 @@ namespace cppcomponents_libuv{
 	typedef cppcomponents::runtime_class<LoopId, cppcomponents::object_interfaces<ILoop>, cppcomponents::static_interfaces<ILoopStatics>> Loop_t;
 	typedef cppcomponents::use_runtime_class<Loop_t> Loop;
 
-	
+
+	struct ICpuInfo
+		: public cppcomponents::define_interface < cppcomponents::uuid < 0x747f0089, 0xea00, 0x4821, 0xa75c, 0xd64760ef98cc	>>
+	{
+		cppcomponents::cr_string GetModel();
+		std::int32_t GetSpeed();
+		std::int64_t GetUser();
+		std::int64_t GetNice();
+		std::int64_t GetSys();
+		std::int64_t GetIdle();
+		std::int64_t GetIrq();
+
+		CPPCOMPONENTS_CONSTRUCT(ICpuInfo, GetModel, GetSpeed, GetUser, GetNice, GetSys, GetIdle, GetIrq);
+
+	};
+
+	inline std::string CpuInfoId(){ return "cppcomponents_libuv_dll!CpuInfo"; }
+	typedef cppcomponents::runtime_class < CpuInfoId, cppcomponents::object_interfaces<ICpuInfo>,
+		cppcomponents::factory_interface < cppcomponents::NoConstructorFactoryInterface >>
+		CpuInfo_t;
 
 
-	
+	struct IInterfaceAddress
+		: public cppcomponents::define_interface < cppcomponents::uuid < 0x58aef2f1, 0xa1b6, 0x4a14, 0xa417, 0x9f1f95fed845	>>
+	{
+		cppcomponents::cr_string GetName();
+		cppcomponents::cr_string GetPhysAddr();
+		bool IsInternal();
+		sockaddr_in GetAddress4();
+		sockaddr_in6 GetAddress6();
+		sockaddr_in GetNetMask4();
+		sockaddr_in6 GetNetMask6();
+
+		CPPCOMPONENTS_CONSTRUCT(IInterfaceAddress, GetName, GetPhysAddr, IsInternal, GetAddress4, GetAddress6,
+			GetNetMask4, GetNetMask6);
+	};
+	inline std::string InterfaceAddressId(){ return "cppcomponents_libuv_dll!InterfaceAddress"; }
+	typedef cppcomponents::runtime_class < InterfaceAddressId, cppcomponents::object_interfaces<IInterfaceAddress>,
+		cppcomponents::factory_interface < cppcomponents::NoConstructorFactoryInterface >>
+		InterfaceAddress_t;
+
+	struct IGetAddrinfoRequest
+		: public cppcomponents::define_interface < cppcomponents::uuid<0x9c3fbcb4, 0xa35e, 0x4486, 0x9377, 0xedb1262e5f6e>,
+		IRequest>
+	{
+		cppcomponents::use<ILoop> GetLoop();
+
+		CPPCOMPONENTS_CONSTRUCT(IGetAddrinfoRequest, GetLoop);
+	};
+
+	typedef cppcomponents::delegate < void (use<IGetAddrinfoRequest>, int status, addrinfo* res),
+		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
+	> GetAddrinfoCallback;
+
+	struct IUvStatics
+		: cppcomponents::define_interface < cppcomponents::uuid < 0x92979519, 0x8fe7, 0x42cf, 0x8916, 0x6e6e66b46d4a	>>
+	{
+		int Version();
+		cppcomponents::cr_string VersionString();
+		cppcomponents::cr_string Strerror(int err);
+		cppcomponents::cr_string ErrName(int err);
+		std::size_t HandleSize(int type);
+		std::size_t ReqSize(int type);
+		Buffer BufInit(void* base, std::uint32_t len);
+		std::size_t Strlcpy(char* dst, const char* src, std::size_t size);
+		std::size_t Strlcat(char* dst, const char* src, std::size_t size);
+		int GuessHandle(FileOsType file);
+
+		use<IGetAddrinfoRequest> Getaddrinfo(cppcomponents::use<ILoop>, cppcomponents::use<GetAddrinfoCallback>, cppcomponents::cr_string node,
+			cppcomponents::cr_string service, addrinfo* hints);
+
+		void Freeaddrinfo(addrinfo* ai);
+
+		char** SetupArgs(int argc, char** argv);
+
+		std::string GetProcessTitle();
+		void SetProcessTitle(cppcomponents::cr_string);
+		std::size_t ResidentSetMemory();
+		double Uptime();
+
+		std::vector<cppcomponents::use<ICpuInfo>> CpuInfo();
+		std::vector<cppcomponents::use<IInterfaceAddress>> InterfaceAddresses();
+		std::vector<double> Loadavg();
+
+		sockaddr_in Ip4Addr(cr_string ip, int port);
+		sockaddr_in6 Ip6Addr(cr_string ip, int port);
+
+		std::string Ip4Name(sockaddr_in* src);
+		std::string Ip6Name(sockaddr_in6* src);
+
+		std::string InetNtop(int af, const void* src);
+		void InetPton(int af, cr_string src, void* dst);
+
+		std::string Exepath();
+		std::string Cwd();
+		void Chdir(cr_string dir);
+
+		std::uint64_t GetFreeMemory();
+		std::uint64_t GetTotalMemory();
+
+		std::uint64_t Hrtime();
+
+		void DisableStdioInheritance();
+
+		// No support for dl* use cross_compiler_interface::module
+
+
+		CPPCOMPONENTS_CONSTRUCT(IUvStatics, Version, VersionString,
+			Strerror, ErrName, HandleSize, ReqSize, BufInit, Strlcpy, Strlcat, GuessHandle,
+			Getaddrinfo, Freeaddrinfo, SetupArgs, GetProcessTitle, SetProcessTitle, ResidentSetMemory, Uptime,
+			CpuInfo, InterfaceAddresses, Loadavg, Ip4Addr, Ip6Addr,
+			Ip4Name, Ip6Name, InetNtop, InetPton, Exepath, Cwd, Chdir,
+			GetFreeMemory, GetTotalMemory, Hrtime, DisableStdioInheritance
+
+			);
+
+	};
+
+
+
+
+	inline std::string UvId(){ return "cppcomponents_libuv_dll!Uv"; }
+
+	typedef cppcomponents::runtime_class<UvId, cppcomponents::static_interfaces<IUvStatics>> Uv_t;
+	typedef cppcomponents::use_runtime_class<Uv_t> Uv;
 	
 	struct IStream
 		: public cppcomponents::define_interface < cppcomponents::uuid < 
@@ -497,15 +634,15 @@ namespace cppcomponents_libuv{
 
 
 
-		use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback>);
-		void Listen(int backlog, cppcomponents::use<ConnectionCallback>);
+		use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback>);
+		void ListenRaw(int backlog, cppcomponents::use<ConnectionCallback>);
 		void Accept(use<IStream> client);
 
-		void ReadStart(cppcomponents::use<ReadCallback>);
+		void ReadStartRaw(cppcomponents::use<ReadCallback>);
 		void ReadStop();
-		void Read2Start(cppcomponents::use<Read2Callback>);
-		use<IWriteRequest> Write(Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
-		use<IWriteRequest> Write2(Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
+		void Read2StartRaw(cppcomponents::use<Read2Callback>);
+		use<IWriteRequest> WriteRaw(Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
+		use<IWriteRequest> Write2Raw(Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
 		bool IsReadable();
 		bool IsWritable();
 		void SetBlocking(bool blocking);
@@ -513,8 +650,124 @@ namespace cppcomponents_libuv{
 
 
 
-		CPPCOMPONENTS_CONSTRUCT(IStream, Shutdown,Listen,Accept,ReadStart,ReadStop,Read2Start,Write,
-			Write2,IsReadable,IsWritable,SetBlocking);
+		CPPCOMPONENTS_CONSTRUCT(IStream, ShutdownRaw,ListenRaw,Accept,ReadStartRaw,ReadStop,Read2StartRaw,WriteRaw,
+			Write2Raw,IsReadable,IsWritable,SetBlocking);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IStream){
+			
+			cppcomponents::use<cppcomponents::IFuture<int>> Shutdown(){
+				auto p = cppcomponents::make_promise<int>();
+
+				auto f = [p](use<IShutdownRequest>, int s){
+					p.Set(s);
+				}
+				this->get_interface().ShutdownRaw(cppcomponents::make_delegate<ShutdownCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<int>>();
+			}
+
+			template<class F>
+			void Listen(int backlog, F f){
+				this->get_interface().ListenRaw(backlog, cppcomponents::make_delegate<ConnectionCallback>(f));
+
+			}
+			template<class F>
+			void ReadStart(F f){
+				this->get_interface().ReadStartRaw(cppcomponents::make_delegate<ReadCallback>(f));
+			}
+
+			cppcomponents::unique_channel<std::vector<char>> GetReadChannel(){
+				typedef std::vector<char> c_t;
+				auto ret = cppcomponents::make_channel < c_t>();
+
+				cppcomponents::use<cppcomponents::IChannel<c_t>> chan = ret;
+
+				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, Buffer buf){
+					auto data = static_cast<char*>(buf.base);
+					
+					if (nread >= 0){
+						c_t v(data, data + nread);
+						chan.Write(std::move(v));
+					}
+					else{
+						chan.WriteError(nread);
+					}
+				};
+
+
+				ReadStart(f);
+
+				return ret;
+			}
+			
+
+			template<class F>
+			void Read2Start(F f){
+				this->get_interface().Read2StartRaw(cppcomponents::make_delegate<ReadCallback>(f));
+			}
+
+
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(Buffer* bufs, int bufcnt){
+				auto p = cppcomponents::make_promise<int>();
+				auto func = [p](cppcomponents::use<IWriteRequest>, int status){
+					if (status < 0){
+						p.SetError(status);
+					}
+					else{
+						p.Set(status);
+					}
+				};
+				this->get_interface().WriteRaw(bufs,bufcnt,cppcomponents::make_delegate<WriteCallback>(func));
+				return p.QueryInterface<cppcomponents::IFuture<int>>();
+			}
+
+			template<std::size_t N>
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(const char (&ar)[N]){
+				Buffer b;
+				b.base = const_cast<char*>(&a[0]);
+				b.len = N;
+				
+				return Write(&b, 1);
+			}
+
+
+
+			template<std::size_t N>
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(Buffer (&ar)[N]){
+
+				return Write(&ar[0], N);
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(const std::vector<Buffer>& bufs){
+
+				return Write(const_cast<char*>(&bufs.at(0)), bufs.size());
+			}
+
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(const char* data, std::size_t len){
+				Buffer b;
+				b.base = const_cast<char*>(data);
+				b.len = len;
+
+				return Write(&b, 1);
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(const std::vector<char>& v){
+				return Write(&v.at(0),v.size());
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(const std::string& s){
+				return Write(&s.at(0), s.size());
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(cppcomponents::cr_string s){
+				return Write(&s.at(0), s.size());
+			}
+
+
+
+		};
 
 	};
 
@@ -862,126 +1115,6 @@ namespace cppcomponents_libuv{
 
 
 
-	struct ICpuInfo
-		: public cppcomponents::define_interface < cppcomponents::uuid < 0x747f0089 , 0xea00 , 0x4821 , 0xa75c , 0xd64760ef98cc	>>
-	{
-		cppcomponents::cr_string GetModel();
-		std::int32_t GetSpeed();
-		std::int64_t GetUser();
-		std::int64_t GetNice();
-		std::int64_t GetSys();
-		std::int64_t GetIdle();
-		std::int64_t GetIrq();
-
-		CPPCOMPONENTS_CONSTRUCT(ICpuInfo, GetModel, GetSpeed, GetUser, GetNice, GetSys, GetIdle, GetIrq);
-
-	};
-
-	inline std::string CpuInfoId(){ return "cppcomponents_libuv_dll!CpuInfo"; }
-	typedef cppcomponents::runtime_class<CpuInfoId, cppcomponents::object_interfaces<ICpuInfo>,
-	cppcomponents::factory_interface<cppcomponents::NoConstructorFactoryInterface>>
-		CpuInfo_t;
-
-	struct IInterfaceAddress
-		: public cppcomponents::define_interface < cppcomponents::uuid < 0x58aef2f1 , 0xa1b6 , 0x4a14 , 0xa417 , 0x9f1f95fed845	>>
-	{
-		cppcomponents::cr_string GetName();
-		cppcomponents::cr_string GetPhysAddr();
-		bool IsInternal();
-		sockaddr_in GetAddress4();
-		sockaddr_in6 GetAddress6();
-		sockaddr_in GetNetMask4();
-		sockaddr_in6 GetNetMask6();
-
-		CPPCOMPONENTS_CONSTRUCT(IInterfaceAddress, GetName, GetPhysAddr, IsInternal, GetAddress4, GetAddress6,
-			GetNetMask4, GetNetMask6);
-	};
-	inline std::string InterfaceAddressId(){ return "cppcomponents_libuv_dll!InterfaceAddress"; }
-	typedef cppcomponents::runtime_class<InterfaceAddressId, cppcomponents::object_interfaces<IInterfaceAddress>,
-		cppcomponents::factory_interface < cppcomponents::NoConstructorFactoryInterface >>
-		InterfaceAddress_t;
-
-	struct IGetAddrinfoRequest
-		: public cppcomponents::define_interface < cppcomponents::uuid<0x9c3fbcb4, 0xa35e, 0x4486, 0x9377, 0xedb1262e5f6e>,
-		IRequest>
-	{
-		cppcomponents::use<ILoop> GetLoop();
-
-		CPPCOMPONENTS_CONSTRUCT(IGetAddrinfoRequest, GetLoop);
-	};
-
-	typedef cppcomponents::delegate < void (use<IGetAddrinfoRequest>, int status, addrinfo* res),
-		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
-	> GetAddrinfoCallback;
-
-	struct IUvStatics
-		: cppcomponents::define_interface < cppcomponents::uuid < 0x92979519, 0x8fe7, 0x42cf, 0x8916, 0x6e6e66b46d4a	>>
-	{
-		int Version();
-		cppcomponents::cr_string VersionString();
-		cppcomponents::cr_string Strerror(int err);
-		cppcomponents::cr_string ErrName(int err);
-		std::size_t HandleSize(int type);
-		std::size_t ReqSize(int type);
-		Buffer BufInit(void* base, std::uint32_t len);
-		std::size_t Strlcpy(char* dst, const char* src, std::size_t size);
-		std::size_t Strlcat(char* dst, const char* src, std::size_t size);
-		int GuessHandle(FileOsType file);
-
-		use<IGetAddrinfoRequest> Getaddrinfo(cppcomponents::use<ILoop>, cppcomponents::use<GetAddrinfoCallback>, cppcomponents::cr_string node,
-			cppcomponents::cr_string service, addrinfo* hints);
-
-		void Freeaddrinfo(addrinfo* ai);
-
-		char** SetupArgs(int argc, char** argv);
-
-		std::string GetProcessTitle();
-		void SetProcessTitle(cppcomponents::cr_string);
-		std::size_t ResidentSetMemory();
-		double Uptime();
-
-		std::vector<cppcomponents::use<ICpuInfo>> CpuInfo();
-		std::vector<cppcomponents::use<IInterfaceAddress>> InterfaceAddresses();
-		std::vector<double> Loadavg();
-
-		sockaddr_in Ip4Addr(cr_string ip, int port);
-		sockaddr_in6 Ip6Addr(cr_string ip, int port);
-
-		std::string Ip4Name(sockaddr_in* src);
-		std::string Ip6Name(sockaddr_in6* src);
-
-		std::string InetNtop(int af, const void* src);
-		void InetPton(int af, cr_string src, void* dst);
-
-		std::string Exepath();
-		std::string Cwd();
-		void Chdir(cr_string dir);
-
-		std::uint64_t GetFreeMemory();
-		std::uint64_t GetTotalMemory();
-
-		std::uint64_t Hrtime();
-
-		void DisableStdioInheritance();
-
-		// No support for dl* use cross_compiler_interface::module
-
-
-		CPPCOMPONENTS_CONSTRUCT(IUvStatics, Version, VersionString,
-			Strerror, ErrName, HandleSize, ReqSize, BufInit, Strlcpy, Strlcat, GuessHandle,
-			Getaddrinfo,Freeaddrinfo,SetupArgs,GetProcessTitle,SetProcessTitle,ResidentSetMemory,Uptime,
-			CpuInfo,InterfaceAddresses,Loadavg, Ip4Addr,Ip6Addr,
-			Ip4Name, Ip6Name,InetNtop,InetPton, Exepath, Cwd,Chdir,
-			GetFreeMemory,GetTotalMemory,Hrtime,DisableStdioInheritance
-			
-			);
-
-	};
-
-	inline std::string UvId(){ return "cppcomponents_libuv_dll!Uv"; }
-
-	typedef cppcomponents::runtime_class<UvId, cppcomponents::static_interfaces<IUvStatics>> Uv_t;
-	typedef cppcomponents::use_runtime_class<Uv_t> Uv;
 
 	struct IStdioContainer
 		: public cppcomponents::define_interface <

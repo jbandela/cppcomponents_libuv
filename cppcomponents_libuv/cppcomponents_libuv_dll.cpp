@@ -428,7 +428,7 @@ struct ImpHandleBase{
 
 	bool closed(){ return closed_; }
 
-	void Close(use<CloseCallback> cb){
+	void CloseRaw(use<CloseCallback> cb){
 		closed_ = true;
 		handle_->data = cb.get_portable_base_addref();
 		uv_close(handle_, CloseCallbackRaw);
@@ -534,7 +534,7 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 		cb(ImpHandleNonOwning::create(h).QueryInterface<IHandle>());
 	}
 
-	void Walk(use<WalkCallback> cb){
+	void WalkRaw(use<WalkCallback> cb){
 
 		uv_walk(loop_, WalkCallbackRaw, cb.get_portable_base());
 	}
@@ -571,7 +571,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	use<ConnectionCallback> connection_cb_;
 	use<ReadCallback> read_cb_;
 
-	use<IShutdownRequest> Shutdown(cppcomponents::use<ShutdownCallback> cb){
+	use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		return ImpShutdownRequest::create(cb, is).template QueryInterface<IShutdownRequest>();
 	}
@@ -583,7 +583,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		imp.connection_cb_(is,status);
 	}
 
-	void Listen(int backlog, use<ConnectionCallback> cb){
+	void ListenRaw(int backlog, use<ConnectionCallback> cb){
 
 		connection_cb_ = cb; 
 		throw_if_error(uv_listen(this->get(), backlog, ConnectionCallbackRaw));
@@ -605,7 +605,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		delete buf.base;
 	}
 
-	void ReadStart(use<ReadCallback> cb){
+	void ReadStartRaw(use<ReadCallback> cb){
 		read_cb_ = cb;
 		istream_self_ = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();;
 		try{
@@ -638,7 +638,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	// Can't figure out how to use uv_read2_start
 	// Plan on implentation after more research
-	void Read2Start(use<Read2Callback> cb){
+	void Read2StartRaw(use<Read2Callback> cb){
 		throw error_not_implemented();
 
 	/*	auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
@@ -666,7 +666,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		*/
 	}
 
-	use<IWriteRequest> Write(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
+	use<IWriteRequest> WriteRaw(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
 		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
 		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->template QueryInterface<clv::IStream>()).template QueryInterface<IWriteRequest>();
 		throw_if_error(uv_write(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
@@ -675,7 +675,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		return wr;
 
 	}	
-	use<IWriteRequest> Write2(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
+	use<IWriteRequest> Write2Raw(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
 		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
 		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->template QueryInterface<clv::IStream>()).template QueryInterface<IWriteRequest>();;
 		throw_if_error(uv_write2(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
@@ -1295,7 +1295,7 @@ struct ImpInterfaceAddress : implement_runtime_class<ImpInterfaceAddress, Interf
 };
 
 void assure_null_terminated(cr_string s){
-	if (s.size() && s[s.size() - 1] != 0)throw error_invalid_arg();
+	//if (s.size() && s[s.size() - 1] != 0)throw error_invalid_arg();
 }
 
 struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
