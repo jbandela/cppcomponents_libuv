@@ -31,25 +31,38 @@ using cppcomponents::use;
 
 
 
+
 int main() {
+	cppcomponents::LoopExecutor executor;
 
-	auto loop = luv::Loop::DefaultLoop();
+	//auto loop = luv::Loop::DefaultLoop();
+	luv::Loop loop;
 
-	use<luv::ITcpStream> server = luv::TcpStream { loop }.QueryInterface<luv::ITcpStream>();
+	luv::TcpStream server{ loop.as<luv::ILoop>() };
+
+	luv::Prepare prep{ loop.as<luv::ILoop>() };
+	prep.Start([&](cppcomponents::use<luv::IPrepare>, int status){
+		executor.RunQueuedClosures();
+	});
 
 	struct sockaddr_in bind_addr = luv::Uv::Ip4Addr("0.0.0.0", 7000);
 
 	server.Bind(bind_addr);
-		int counter = 0;
+	int counter = 0;
 
-	server.Listen(1,cppcomponents::resumable<void>([&](use<luv::IStream> s, int status,cppcomponents::awaiter<void> await)mutable{
-		luv::TcpStream client(luv::Loop::DefaultLoop());
-		s.Accept(client.QueryInterface<luv::IStream>());
-		auto chan = client.GetReadChannel();
+	server.Listen(1, [&loop, &executor](use<luv::IStream> s, int status){
+		assert(_CrtCheckMemory());
+		luv::TcpStream clientstream(loop.as<luv::ILoop>());
+		auto client = clientstream.as<luv::IStream>();
+		s.Accept(client);
+		auto uchan = client.GetReadChannel();
+		use < cppcomponents::IChannel < std::vector < char >> > chan = uchan.get();
+		uchan.release();
+		chan.Read().Then(executor.QueryInterface<cppcomponents::IExecutor>(), [&executor, client](cppcomponents::use < cppcomponents::IFuture < std::vector<char >> > f)mutable{
+			auto buf = f.Get();
+			assert(_CrtCheckMemory());
 
-		auto buf = await(chan.Read());
-
-					std::string str{ buf.begin(), buf.end() };
+			std::string str{ buf.begin(), buf.end() };
 			std::cerr << str;
 			std::string response = R"(HTTP/1.1 200 OK
 Date: Fri, 31 Dec 1999 23:59:59 GMT
@@ -61,9 +74,12 @@ another-footer: another-value
 
 abcdefghijklmnopqrstuvwxyz1234567890abcdef
 )";
-			client.Write(response);
+			assert(_CrtCheckMemory());
+			client.Write(response).Then(executor.QueryInterface<cppcomponents::IExecutor>(), [client](cppcomponents::use < cppcomponents::IFuture < int >> f){
+				int i = f.Get();
+			});
+			assert(_CrtCheckMemory());
 
-	
 
 
 			cross_compiler_interface::module m("cppcomponents_libuv_dll");
@@ -71,8 +87,10 @@ abcdefghijklmnopqrstuvwxyz1234567890abcdef
 			auto count = get_object_count();
 			std::cerr << "\nObject count = " << count << "\n\n";
 
+		});
 
-	}));
+
+	});
 
 	loop.Run();
 	return 0;

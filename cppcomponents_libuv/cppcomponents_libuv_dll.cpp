@@ -426,6 +426,8 @@ struct ImpHandleBase{
 		cb();
 	}
 
+
+
 	bool closed(){ return closed_; }
 
 	void CloseRaw(use<CloseCallback> cb){
@@ -552,9 +554,9 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 
 uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
 	try{
-		auto buf = cppcomponents::Buffer::Create(suggested_size);
-		 auto ret = uv_buf_init(buf.Begin(), buf.Size());
-		 buf.get_portable_base_addref();
+		//auto buf = cppcomponents::Buffer::Create(suggested_size);
+		 auto ret = uv_buf_init(new char[suggested_size],suggested_size);
+		 //buf.get_portable_base_addref();
 		 return ret;
 	}
 	catch (std::exception&){
@@ -568,7 +570,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	typedef cppcomponents::delegate < void(int) > ConnectionCallbackHelper;
 
-	use<clv::IStream> istream_self_;
+	//use<clv::IStream> istream_self_;
 	use<ConnectionCallback> connection_cb_;
 	use<ReadCallback> read_cb_;
 
@@ -595,30 +597,34 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	}
 
 	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
-		auto ibuf = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
+		//auto ibuf = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
+		clv::Buffer b;
+		b.base = buf.base;
+		b.len = buf.len;
 		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(stream));
 		ImpStreamBase& imp = *derived;
 		auto is = derived->template QueryInterface<clv::IStream>();
-		imp.read_cb_(is, nread, ibuf);
+		imp.read_cb_(is, nread, b);
+		delete [] buf.base;
 	}
 
 	void ReadStartRaw(use<ReadCallback> cb){
 		read_cb_ = cb;
-		istream_self_ = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();;
+		//istream_self_ = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();;
 		try{
 		throw_if_error(uv_read_start(this->get(), AllocCallbackRaw, ReadCallbackRaw));
 		}
 		catch (...){
-			istream_self_ = nullptr;
+			//istream_self_ = nullptr;
 			read_cb_ = nullptr;
 		}
 
 	}
 
 	void ReadStop(){
-		istream_self_ = nullptr;
-		read_cb_ = nullptr;
 		uv_read_stop(this->get());
+		//read_cb_ = nullptr;
+		//istream_self_ = nullptr;
 	}
 	/*
 	static void Read2CallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf,int pending){
@@ -703,7 +709,17 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 
 	typedef ImpStreamBase<uv_tcp_t, ImpTcpStream> imp_base_t;
 
+	static void CloseCallbackDelete(uv_handle_t* h){
+		auto p = static_cast<ImpTcpStream*>(h->data);
+		delete p;
+	}
+	void ReleaseImplementationDestroy(){
+		handle_->data = this;
+		closed_ = true;
+		uv_close(handle_, CloseCallbackDelete);
+		
 
+	}
 
 	ImpTcpStream(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_tcp_init(as_uv_type(loop), this));
@@ -1002,7 +1018,7 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 
 	}
 
-	void Start(use<PrepareCallback> cb){
+	void StartRaw(use<PrepareCallback> cb){
 		cb_ = cb;
 		prepare_self_ = this->QueryInterface<IPrepare>();
 		try{

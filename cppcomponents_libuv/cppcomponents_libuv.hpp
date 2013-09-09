@@ -615,7 +615,7 @@ namespace cppcomponents_libuv{
 			CPPCOMPONENTS_CONSTRUCT(IShutdownRequest, GetHandle);
 		};
 
-		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t, cppcomponents::use<cppcomponents::IBuffer>),
+		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t, Buffer),
 			cppcomponents::uuid<0x38df861d, 0x421b, 0x43d1, 0xb081, 0x7d2ad030c44c		>
 		> ReadCallback;
 
@@ -686,19 +686,18 @@ namespace cppcomponents_libuv{
 
 
 
-				cppcomponents::use<cppcomponents::IChannel<c_t>> chan = ret;
-				auto stream = this->get_interface();
+				auto chan = ret.get();
+				auto stream = this->get_interface().QueryInterface<IStream>();
 				chan.SetOnClosed([stream]()mutable{stream.ReadStop(); stream = nullptr; });
-				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer> buf)mutable{
+				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, Buffer buf)mutable{
 					if (!chan)return;
 					if (nread >= 0){
-						c_t vec(buf.Begin(), buf.Begin() + nread);
-						buf.SetSize(nread);
+						c_t vec(buf.base, buf.base + nread);
 						chan.Write(vec);
 					}
 					else{
 						chan.WriteError(nread);
-						chan = nullptr;
+						chan.Close();
 					}
 				};
 
@@ -1002,10 +1001,17 @@ namespace cppcomponents_libuv{
 			cppcomponents::uuid<0x66854dad, 0x0408, 0x4c4e, 0xafcd, 0x5a2fe7366914>
 		> PrepareCallback;
 
-		void Start(cppcomponents::use<PrepareCallback>);
+		void StartRaw(cppcomponents::use<PrepareCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(IPrepare, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(IPrepare, StartRaw, Stop);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IPrepare){
+			template<class F>
+			void Start(F f){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<PrepareCallback>(f));
+			}
+		};
 	};
 
 	typedef IPrepare::PrepareCallback PrepareCallback;
