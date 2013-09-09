@@ -33,7 +33,7 @@ uv_work_t* as_uv_type(use<IWorkRequest> w){
 uv_stream_t* as_uv_type(use<clv::IStream> s){
 	return static_cast<uv_stream_t*>(s.UvHandle());
 }
-uv_buf_t* as_uv_type(Buffer* b){
+uv_buf_t* as_uv_type(clv::Buffer* b){
 	return reinterpret_cast<uv_buf_t*>(b);
 }
 uv_connect_t* as_uv_type(use<IConnectRequest> c){
@@ -552,7 +552,10 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 
 uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
 	try{
-		return uv_buf_init(new char[suggested_size], suggested_size);
+		auto buf = cppcomponents::Buffer::Create(suggested_size);
+		 auto ret = uv_buf_init(buf.Begin(), buf.Size());
+		 buf.get_portable_base_addref();
+		 return ret;
 	}
 	catch (std::exception&){
 		return uv_buf_init(nullptr, 0);
@@ -564,8 +567,6 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 
 	typedef cppcomponents::delegate < void(int) > ConnectionCallbackHelper;
-	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf) > ReadCallbackHelper;
-	typedef cppcomponents::delegate < void(std::ptrdiff_t nread, Buffer buf, int pending) > Read2CallbackHelper;
 
 	use<clv::IStream> istream_self_;
 	use<ConnectionCallback> connection_cb_;
@@ -594,15 +595,11 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	}
 
 	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
-		Buffer b;
-		b.base = buf.base;
-		b.len = buf.len;
+		auto ibuf = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
 		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(stream));
 		ImpStreamBase& imp = *derived;
 		auto is = derived->template QueryInterface<clv::IStream>();
-		imp.read_cb_(is, nread, b);
-
-		delete buf.base;
+		imp.read_cb_(is, nread, ibuf);
 	}
 
 	void ReadStartRaw(use<ReadCallback> cb){
@@ -625,7 +622,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	}
 	/*
 	static void Read2CallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf,int pending){
-		Buffer b;
+		clv::Buffer b;
 		b.base = buf.base;
 		b.len = buf.len;
 
@@ -642,7 +639,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		throw error_not_implemented();
 
 	/*	auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
-		auto cbh = make_delegate<Read2CallbackHelper>([is, cb](std::ptrdiff_t nread, Buffer buf,int pending){
+		auto cbh = make_delegate<Read2CallbackHelper>([is, cb](std::ptrdiff_t nread, clv::Buffer buf,int pending){
 			cb(is, nread, buf,pending);
 		});
 		this->handle_->data = delegate_to_void(cbh);
@@ -666,8 +663,8 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		*/
 	}
 
-	use<IWriteRequest> WriteRaw(Buffer* bufs, int bufcnt, use<WriteCallback> cb){
-		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
+	use<IWriteRequest> WriteRaw(clv::Buffer* bufs, int bufcnt, use<WriteCallback> cb){
+		static_assert(sizeof(clv::Buffer) == sizeof(uv_buf_t), "clv::Buffer and uv_buf_t not compatible");
 		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->template QueryInterface<clv::IStream>()).template QueryInterface<IWriteRequest>();
 		throw_if_error(uv_write(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
 			ImpWriteRequest::RequestCb));
@@ -675,8 +672,8 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		return wr;
 
 	}	
-	use<IWriteRequest> Write2Raw(Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
-		static_assert(sizeof(Buffer) == sizeof(uv_buf_t), "Buffer and uv_buf_t not compatible");
+	use<IWriteRequest> Write2Raw(clv::Buffer* bufs, int bufcnt, use<clv::IStream> is,use<WriteCallback> cb){
+		static_assert(sizeof(clv::Buffer) == sizeof(uv_buf_t), "clv::Buffer and uv_buf_t not compatible");
 		auto wr = ImpWriteRequest::create(cb, static_cast<Derived*>(this)->template QueryInterface<clv::IStream>()).template QueryInterface<IWriteRequest>();;
 		throw_if_error(uv_write2(as_uv_type(wr), this->get(), as_uv_type(bufs), bufcnt,
 			as_uv_type(is),ImpWriteRequest::RequestCb));
@@ -809,14 +806,14 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 	void SetTtl(std::int32_t ttl){
 		throw_if_error(uv_udp_set_ttl(this, ttl));
 	}
-	use<IUdpSendRequest> Send(Buffer* bufs, int buffcnt, sockaddr_in addr,
+	use<IUdpSendRequest> Send(clv::Buffer* bufs, int buffcnt, sockaddr_in addr,
 		cppcomponents::use<UdpSendCallback> cb){
 			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
 			throw_if_error(uv_udp_send(as_uv_type(sr), this,
 				as_uv_type(bufs),buffcnt, addr, ImpUdpSendRequest::RequestCb));
 			return sr;
 	}
-	use<IUdpSendRequest> Send6(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
+	use<IUdpSendRequest> Send6(clv::Buffer* bufs, int buffcnt, sockaddr_in6 addr,
 		cppcomponents::use<UdpSendCallback> cb){
 			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
 			throw_if_error(uv_udp_send6(as_uv_type(sr), this,
@@ -827,7 +824,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 	struct sockaddr* addr, unsigned flags){
 		auto& imp = *static_cast <ImpUdpStream*>(handle);
 
-		Buffer b;
+		clv::Buffer b;
 		b.base = buf.base;
 		b.len = buf.len;
 
@@ -1317,9 +1314,9 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 	static std::size_t ReqSize(int type){
 		return uv_req_size(static_cast<uv_req_type>(type));
 	}
-	static Buffer BufInit(void* base, std::uint32_t len){
+	static clv::Buffer BufInit(void* base, std::uint32_t len){
 		auto b = uv_buf_init(static_cast<char*>(base), len);
-		Buffer ret;
+		clv::Buffer ret;
 		ret.base = b.base;
 		ret.len = b.len;
 		return ret;
@@ -2057,3 +2054,9 @@ struct ImpRwlock : implement_runtime_class<ImpRwlock, Rwlock_t>{
 
 CPPCOMPONENTS_DEFINE_FACTORY();
 
+extern "C"{
+
+	CROSS_CALL_EXPORT_FUNCTION std::size_t CROSS_CALL_CALLING_CONVENTION GetObjectCount(){
+		return cross_compiler_interface::object_counter::get().get_count();
+	}
+}

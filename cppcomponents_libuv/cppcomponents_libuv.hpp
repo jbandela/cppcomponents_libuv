@@ -7,6 +7,7 @@
 #include <cppcomponents/future.hpp>
 #include <cppcomponents/channel.hpp>
 #include <cppcomponents/loop_executor.hpp>
+#include <cppcomponents/buffer.hpp>
 
 
 // Define our buffer structure
@@ -232,6 +233,9 @@ namespace cppcomponents_libuv{
 	using cppcomponents::runtime_class;
 	using cppcomponents::use_runtime_class;
 	using cppcomponents::implement_runtime_class;
+
+
+
 
 	// All the Interfaces declared
 
@@ -611,11 +615,11 @@ namespace cppcomponents_libuv{
 			CPPCOMPONENTS_CONSTRUCT(IShutdownRequest, GetHandle);
 		};
 
-		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t, Buffer),
+		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t, cppcomponents::use<cppcomponents::IBuffer>),
 			cppcomponents::uuid<0x38df861d, 0x421b, 0x43d1, 0xb081, 0x7d2ad030c44c		>
 		> ReadCallback;
 
-		typedef cppcomponents::delegate < void(use<IStream> pipe, std::ptrdiff_t nread, Buffer buf,
+		typedef cppcomponents::delegate < void(use<IStream> pipe, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer>,
 			int pending),
 			cppcomponents::uuid<0xd4efdca8, 0xc398, 0x465a, 0x8812, 0x653250b6cdb4		>
 		> Read2Callback;
@@ -677,20 +681,24 @@ namespace cppcomponents_libuv{
 			}
 
 			cppcomponents::unique_channel<std::vector<char>> GetReadChannel(){
-				typedef std::vector<char> c_t;
+				typedef std::vector<char>c_t;
 				auto ret = cppcomponents::make_channel < c_t>();
 
-				cppcomponents::use<cppcomponents::IChannel<c_t>> chan = ret;
 
-				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, Buffer buf){
-					auto data = static_cast<char*>(buf.base);
-					
+
+				cppcomponents::use<cppcomponents::IChannel<c_t>> chan = ret;
+				auto stream = this->get_interface();
+				chan.SetOnClosed([stream]()mutable{stream.ReadStop(); stream = nullptr; });
+				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer> buf)mutable{
+					if (!chan)return;
 					if (nread >= 0){
-						c_t v(data, data + nread);
-						chan.Write(std::move(v));
+						c_t vec(buf.Begin(), buf.Begin() + nread);
+						buf.SetSize(nread);
+						chan.Write(vec);
 					}
 					else{
 						chan.WriteError(nread);
+						chan = nullptr;
 					}
 				};
 

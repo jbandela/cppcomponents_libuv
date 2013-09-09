@@ -35,23 +35,21 @@ int main() {
 
 	auto loop = luv::Loop::DefaultLoop();
 
-	luv::TcpStream server{ loop };
+	use<luv::ITcpStream> server = luv::TcpStream { loop }.QueryInterface<luv::ITcpStream>();
 
 	struct sockaddr_in bind_addr = luv::Uv::Ip4Addr("0.0.0.0", 7000);
 
 	server.Bind(bind_addr);
+		int counter = 0;
 
-	server.Listen(1,cppcomponents::resumable<void>([](use<luv::IStream> s, int status, cppcomponents::awaiter<void> await){
-
+	server.Listen(1,cppcomponents::resumable<void>([&](use<luv::IStream> s, int status,cppcomponents::awaiter<void> await)mutable{
 		luv::TcpStream client(luv::Loop::DefaultLoop());
 		s.Accept(client.QueryInterface<luv::IStream>());
-
 		auto chan = client.GetReadChannel();
-		while (true){
 
-		
-			auto vec = await(chan.Read());
-			std::string str{ vec.begin(), vec.end() };
+		auto buf = await(chan.Read());
+
+					std::string str{ buf.begin(), buf.end() };
 			std::cerr << str;
 			std::string response = R"(HTTP/1.1 200 OK
 Date: Fri, 31 Dec 1999 23:59:59 GMT
@@ -63,14 +61,20 @@ another-footer: another-value
 
 abcdefghijklmnopqrstuvwxyz1234567890abcdef
 )";
-			await(client.Write(response));
-		}
+			client.Write(response);
+
+	
+
+
+			cross_compiler_interface::module m("cppcomponents_libuv_dll");
+			auto get_object_count = m.load_module_function<std::size_t(*)()>("GetObjectCount");
+			auto count = get_object_count();
+			std::cerr << "\nObject count = " << count << "\n\n";
 
 
 	}));
 
 	loop.Run();
-
 	return 0;
 
 }
