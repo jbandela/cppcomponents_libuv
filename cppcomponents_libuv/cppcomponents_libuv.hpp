@@ -680,12 +680,11 @@ namespace cppcomponents_libuv{
 				this->get_interface().ReadStartRaw(cppcomponents::make_delegate<ReadCallback>(f));
 			}
 
-			cppcomponents::unique_channel<std::vector<char>> GetReadChannel(){
+			cppcomponents::Channel<std::vector<char>> GetReadChannel(){
 				typedef std::vector<char>c_t;
 				auto chan = cppcomponents::make_channel < c_t>();
 
 
-				cppcomponents::unique_channel<c_t> ret{chan};
 				auto stream = this->get_interface().QueryInterface<IStream>();
 				chan.SetOnClosed([stream]()mutable{stream.ReadStop(); stream = nullptr; });
 				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, Buffer buf)mutable{
@@ -703,7 +702,7 @@ namespace cppcomponents_libuv{
 
 				ReadStart(f);
 
-				return ret;
+				return chan;
 			}
 			
 
