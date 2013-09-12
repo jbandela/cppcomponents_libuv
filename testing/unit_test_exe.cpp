@@ -33,26 +33,24 @@ using cppcomponents::use;
 
 
 int main() {
-	//cppcomponents::LoopExecutor executor;
+	cppcomponents::LoopExecutor executor;
 
-	//auto loop = luv::Loop::DefaultLoop();
-	luv::Loop loop;
+	auto loop = luv::Loop::DefaultLoop();
 
 	luv::TcpStream server{ loop };
 
-	//luv::Prepare prep{ loop };
-	//prep.Start([&](cppcomponents::use<luv::IPrepare>, int status){
-	//	executor.RunQueuedClosures();
-	//});
+	luv::Prepare prep{ loop };
+	prep.Start([&](cppcomponents::use<luv::IPrepare>, int status){
+		executor.RunQueuedClosures();
+	});
 
 	struct sockaddr_in bind_addr = luv::Uv::Ip4Addr("0.0.0.0", 7001);
 
 	server.Bind(bind_addr);
 	int counter = 0;
 
-	server.Listen(1, cppcomponents::resumable<void>([&loop](use<luv::IStream> s, int status, cppcomponents::awaiter<void> await){
-		luv::TcpStream clientstream(loop.as<luv::ILoop>());
-		auto client = clientstream.as<luv::IStream>();
+	server.Listen(1, cppcomponents::resumable<void>([&loop,&executor](use<luv::IStream> s, int status, cppcomponents::awaiter<void> await){
+		luv::TcpStream client{loop};
 		s.Accept(client);
 		auto chan = client.GetReadChannel();
 
@@ -60,14 +58,14 @@ int main() {
 		bool has_more = true;
 		std::string data;
 		while (has_more){
-			auto f = await.as_future(chan.Read());
+			auto f = await.as_future(executor,chan.Read());
 			auto errcode = f.ErrorCode();
 			if (errcode < 0){
 				has_more = false;
 			}
 			else{
 				auto buf = f.Get();
-				data.insert(data.end(),buf.begin(), buf.end());
+				data.insert(data.end(),buf.Begin(), buf.End());
 							std::string response = R"(HTTP/1.1 200 OK
 Date: Fri, 31 Dec 1999 23:59:59 GMT
 Content-Type: text/plain
@@ -78,7 +76,7 @@ another-footer: another-value
 
 abcdefghijklmnopqrstuvwxyz1234567890abcdef
 )";			
-			await(client.Write(response));
+			await(executor,client.Write(response));
 			}
 		}
 		std::cerr << data;

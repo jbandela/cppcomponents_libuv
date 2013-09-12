@@ -615,7 +615,7 @@ namespace cppcomponents_libuv{
 			CPPCOMPONENTS_CONSTRUCT(IShutdownRequest, GetHandle);
 		};
 
-		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t, Buffer),
+		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t,  cppcomponents::use<cppcomponents::IBuffer>),
 			cppcomponents::uuid<0x38df861d, 0x421b, 0x43d1, 0xb081, 0x7d2ad030c44c		>
 		> ReadCallback;
 
@@ -680,18 +680,17 @@ namespace cppcomponents_libuv{
 				this->get_interface().ReadStartRaw(cppcomponents::make_delegate<ReadCallback>(f));
 			}
 
-			cppcomponents::Channel<std::vector<char>> GetReadChannel(){
-				typedef std::vector<char>c_t;
+			cppcomponents::Channel<cppcomponents::use<cppcomponents::IBuffer>> GetReadChannel(){
+				typedef cppcomponents::use<cppcomponents::IBuffer> c_t;
 				auto chan = cppcomponents::make_channel < c_t>();
 
 
 				auto stream = this->get_interface().QueryInterface<IStream>();
 				chan.SetOnClosed([stream]()mutable{stream.ReadStop(); stream = nullptr; });
-				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, Buffer buf)mutable{
+				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer> buf)mutable{
 					if (!chan)return;
 					if (nread >= 0){
-						c_t vec(buf.base, buf.base + nread);
-						chan.Write(vec);
+						chan.Write(buf);
 					}
 					else{
 						chan.WriteError(nread);

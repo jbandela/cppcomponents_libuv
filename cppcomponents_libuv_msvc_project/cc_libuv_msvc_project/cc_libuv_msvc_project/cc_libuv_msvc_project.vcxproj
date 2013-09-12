@@ -41,7 +41,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(SolutionDir)..\..\..\cppcomponents_libuv\dependencies\libuv\include\;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\..\..\cppcomponents_libuv\dependencies\libuv\include\;C:\Users\jrb\Source\Repos\boost\;C:\Users\jrb\Source\Repos\cppcomponents;C:\Users\jrb\Source\Repos\cppcomponents_async_coroutine_wrapper;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>

@@ -554,9 +554,9 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 
 uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
 	try{
-		//auto buf = cppcomponents::Buffer::Create(suggested_size);
-		 auto ret = uv_buf_init(new char[suggested_size],suggested_size);
-		 //buf.get_portable_base_addref();
+		auto buf = cppcomponents::Buffer::Create(suggested_size);
+		 auto ret = uv_buf_init(buf.Begin(),suggested_size);
+		 buf.get_portable_base_addref();
 		 return ret;
 	}
 	catch (std::exception&){
@@ -598,14 +598,15 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
 		//auto ibuf = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
-		clv::Buffer b;
-		b.base = buf.base;
-		b.len = buf.len;
+		auto b = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
+		if (nread >= 0){
+			b.SetSize(nread);
+		}
+
 		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(stream));
 		ImpStreamBase& imp = *derived;
 		auto is = derived->template QueryInterface<clv::IStream>();
 		imp.read_cb_(is, nread, b);
-		delete [] buf.base;
 	}
 
 	void ReadStartRaw(use<ReadCallback> cb){
