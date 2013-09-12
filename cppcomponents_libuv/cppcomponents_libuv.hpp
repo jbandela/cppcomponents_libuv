@@ -295,9 +295,13 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(IHandle){
 
-			template<class F>
-			void Close(F f){
+			cppcomponents::Future<void> Close(){
+				auto p = cppcomponents::make_promise<void>();
+				auto f = [p](){
+					p.Set();
+				};
 				this->get_interface().CloseRaw(cppcomponents::make_delegate<CloseCallback>(f));
+				return p.QueryInterface < cppcomponents::IFuture<void>>();
 			}
 
 		};
@@ -695,6 +699,7 @@ namespace cppcomponents_libuv{
 					else{
 						chan.WriteError(nread);
 						chan.Close();
+						chan = nullptr;
 					}
 				};
 
@@ -809,11 +814,47 @@ namespace cppcomponents_libuv{
 		void Bind6(sockaddr_in6);
 		void Getsockname(sockaddr* name, int* namelen);
 		void Getpeername(sockaddr* name, int* namelen);
-		use<IConnectRequest> Connect(sockaddr_in address, cppcomponents::use<ConnectCallback>);
-		use<IConnectRequest> Connect6(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
+		use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback>);
+		use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
 
 		CPPCOMPONENTS_CONSTRUCT(ITcpStream, Open,NoDelay,KeepAlive,SimultaneousAccepts,
-			Bind,Bind6,Getsockname,Getpeername,Connect,Connect6);
+			Bind,Bind6,Getsockname,Getpeername,ConnectRaw,Connect6Raw);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ITcpStream){
+			cppcomponents::Future<int> Connect(sockaddr_in address){
+				auto p = cppcomponents::make_promise<int>();
+				auto f = [p](use<IConnectRequest>, int result){
+					if (result < 0){
+						p.SetError(result);
+					}
+					else{
+						p.Set(result);
+					}
+				};
+
+				this->get_interface().ConnectRaw(address, cppcomponents::make_delegate<ConnectCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<int>>();
+	
+			}
+			cppcomponents::Future<int> Connect(sockaddr_in6 address){
+				auto p = cppcomponents::make_promise<int>();
+				auto f = [p](use<IConnectRequest>, int result){
+					if (result < 0){
+						p.SetError(result);
+					}
+					else{
+						p.Set(result);
+					}
+				};
+
+				this->get_interface().Connect6Raw(address, cppcomponents::make_delegate<ConnectCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<int>>();
+	
+			}
+
+		};
 	};
 
 	typedef ITcpStream::ConnectCallback ConnectCallback;

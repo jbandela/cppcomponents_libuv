@@ -431,6 +431,7 @@ struct ImpHandleBase{
 	bool closed(){ return closed_; }
 
 	void CloseRaw(use<CloseCallback> cb){
+		if (closed_) return;
 		closed_ = true;
 		handle_->data = cb.get_portable_base_addref();
 		uv_close(handle_, CloseCallbackRaw);
@@ -570,10 +571,20 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	typedef cppcomponents::delegate < void(int) > ConnectionCallbackHelper;
 
+
 	//use<clv::IStream> istream_self_;
 	use<ConnectionCallback> connection_cb_;
 	use<ReadCallback> read_cb_;
 
+	bool reading_ = false;
+
+	void CloseRaw(use<CloseCallback> cb){
+		if (closed_) return;
+		closed_ = true;
+		handle_->data = cb.get_portable_base_addref();
+		uv_close(handle_, CloseCallbackRaw);
+		connection_cb_ = nullptr;
+	}
 	use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
 		return ImpShutdownRequest::create(cb, is).template QueryInterface<IShutdownRequest>();
@@ -607,9 +618,13 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		ImpStreamBase& imp = *derived;
 		auto is = derived->template QueryInterface<clv::IStream>();
 		imp.read_cb_(is, nread, b);
+		if (imp.reading_ == false){
+			imp.read_cb_ = nullptr;
+		}
 	}
 
 	void ReadStartRaw(use<ReadCallback> cb){
+		reading_ = true;
 		read_cb_ = cb;
 		//istream_self_ = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();;
 		try{
@@ -617,6 +632,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		}
 		catch (...){
 			//istream_self_ = nullptr;
+			reading_ = false;
 			read_cb_ = nullptr;
 		}
 
@@ -624,7 +640,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	void ReadStop(){
 		uv_read_stop(this->get());
-		//read_cb_ = nullptr;
+		reading_ = false;
 		//istream_self_ = nullptr;
 	}
 	/*
@@ -769,12 +785,12 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 		throw_if_error(uv_tcp_getpeername(this, name, namelen));
 	}
 
-	use<IConnectRequest> Connect(sockaddr_in address, cppcomponents::use<ConnectCallback> cb){
+	use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback> cb){
 		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
 		throw_if_error(uv_tcp_connect(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
 		return cr;
 	}
-	use<IConnectRequest> Connect6(sockaddr_in6 address, cppcomponents::use<ConnectCallback> cb){
+	use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback> cb){
 		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
 		throw_if_error(uv_tcp_connect6(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
 		return cr;
