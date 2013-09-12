@@ -38,9 +38,9 @@ int main() {
 	//auto loop = luv::Loop::DefaultLoop();
 	luv::Loop loop;
 
-	luv::TcpStream server{ loop.as<luv::ILoop>() };
+	luv::TcpStream server{ loop };
 
-	luv::Prepare prep{ loop.as<luv::ILoop>() };
+	luv::Prepare prep{ loop };
 	prep.Start([&](cppcomponents::use<luv::IPrepare>, int status){
 		executor.RunQueuedClosures();
 	});
@@ -75,7 +75,7 @@ another-footer: another-value
 abcdefghijklmnopqrstuvwxyz1234567890abcdef
 )";
 			assert(_CrtCheckMemory());
-			client.Write(response).Then(executor.QueryInterface<cppcomponents::IExecutor>(), [client](cppcomponents::use < cppcomponents::IFuture < int >> f){
+			client.Write(response).Then(executor, [client](cppcomponents::use < cppcomponents::IFuture < int >> f){
 				int i = f.Get();
 			});
 			assert(_CrtCheckMemory());

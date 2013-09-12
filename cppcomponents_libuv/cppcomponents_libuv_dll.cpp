@@ -704,22 +704,32 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 };
 
+	template<class T>
+	 void CloseCallbackDelete(uv_handle_t* h){
+		auto p = static_cast<T*>(h->data);
+		delete p;
+	}
+
+
+	 template<class T>
+	 void CloseAndDelete(T* pthis){
+		if(pthis->closed_ == true) return;
+		pthis->handle_->data = pthis;
+		pthis->closed_ = true;
+		uv_close(pthis->handle_, CloseCallbackDelete<T>);
+
+	 }
+
+
+#define CPPCOMPONENTS_LIBUV_RELEASE void ReleaseImplementationDestroy(){CloseAndDelete(this);}
+
 
 struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_runtime_class<ImpTcpStream, TcpStream_t>{
 
 	typedef ImpStreamBase<uv_tcp_t, ImpTcpStream> imp_base_t;
 
-	static void CloseCallbackDelete(uv_handle_t* h){
-		auto p = static_cast<ImpTcpStream*>(h->data);
-		delete p;
-	}
-	void ReleaseImplementationDestroy(){
-		handle_->data = this;
-		closed_ = true;
-		uv_close(handle_, CloseCallbackDelete);
-		
+	CPPCOMPONENTS_LIBUV_RELEASE
 
-	}
 
 	ImpTcpStream(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_tcp_init(as_uv_type(loop), this));
@@ -769,11 +779,7 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 		return cr;
 	}
 
-	~ImpTcpStream(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 };
 
@@ -781,7 +787,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 {
 	typedef ImpStreamBase<uv_udp_t, ImpUdpStream> imp_base_t;
 
-
+	CPPCOMPONENTS_LIBUV_RELEASE
 
 	// This keeps us alive during async requests
 	use<IUdpStream> self_;
@@ -869,11 +875,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 		cb_ = nullptr;
 		throw_if_error(uv_udp_recv_stop(this)); 
 	}
-	~ImpUdpStream(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 };
 
@@ -881,7 +883,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement_runtime_class<ImpTtyStream, Tty_t>
 {
 	typedef ImpStreamBase<uv_tty_t, ImpTtyStream> imp_base_t;
-
+	CPPCOMPONENTS_LIBUV_RELEASE
 
 
 	ImpTtyStream(use<ILoop> loop, FileOsType fd, bool readable)
@@ -904,11 +906,7 @@ struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement
 		uv_tty_reset_mode();
 	}
 
-	~ImpTtyStream(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 
 };
@@ -918,7 +916,7 @@ struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_
 {
 	typedef ImpStreamBase<uv_pipe_t, ImpPipe> imp_base_t;
 
-
+	CPPCOMPONENTS_LIBUV_RELEASE
 
 	ImpPipe(use<ILoop> loop, bool ipc) : imp_base_t(this)
 	{
@@ -943,17 +941,13 @@ struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_
 		uv_pipe_pending_instances(this, count);
 	}
 
-	~ImpPipe(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 };
 
 struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<ImpPoll, Poll_t>
 {
 	typedef ImpHandleBase<uv_poll_t> imp_base_t;
-
+	CPPCOMPONENTS_LIBUV_RELEASE
 
 	use<IPoll> poll_self_;
 	use<PollCallback> cb_; 
@@ -990,11 +984,7 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<Im
 		cb_ = nullptr;
 		throw_if_error(uv_poll_stop(this));
 	}
-	~ImpPoll(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 	
 };
 
@@ -1002,7 +992,7 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 {
 	typedef ImpHandleBase<uv_prepare_t> imp_base_t;
 
-
+	CPPCOMPONENTS_LIBUV_RELEASE
 
 	use<IPrepare> prepare_self_;
 	use<PrepareCallback> cb_;
@@ -1038,11 +1028,7 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 		throw_if_error(uv_prepare_stop(this));
 	}
 
-	~ImpPrepare(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 };
 
@@ -1050,7 +1036,7 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 {
 	typedef ImpHandleBase<uv_check_t> imp_base_t;
 
-
+	CPPCOMPONENTS_LIBUV_RELEASE
 	use<ICheck> check_self_;
 	use<CheckCallback> cb_;
 
@@ -1084,11 +1070,7 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 		cb_ = nullptr;
 		throw_if_error(uv_check_stop(this));
 	}
-	~ImpCheck(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 };
 
@@ -1096,6 +1078,7 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<ImpIdle, Idle_t>
 {
 	typedef ImpHandleBase<uv_idle_t> imp_base_t;
+	CPPCOMPONENTS_LIBUV_RELEASE
 	use<IIdle> idle_self_;
 	use<IdleCallback> cb_;
 
@@ -1128,21 +1111,16 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 		idle_self_ = nullptr;
 		throw_if_error(uv_idle_stop(this));
 	}
-	~ImpIdle(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 };
 
 struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class<ImpAsync, Async_t>
 {
 	typedef ImpHandleBase<uv_async_t> imp_base_t;
-
+	CPPCOMPONENTS_LIBUV_RELEASE
 	// We cannot call close in another thread
 	// therefore we have an another async to help with destruction
-	uv_async_t destructor_async_;
 
 	use<IAsync> async_self_;
 	use<AsyncCallback> callback_;
@@ -1153,19 +1131,11 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 		imp.async_self_ = nullptr;
 	}
 
-	static void DestructorCallbackRaw(uv_async_t* handle, int status){
-		auto hself = static_cast<uv_handle_t*>(handle->data);
 
-		// close both handles
-		uv_close(hself, nullptr);
-		uv_close(reinterpret_cast<uv_handle_t*>(handle), nullptr);
-	}
 
 	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),callback_(cb)
 	{
 		throw_if_error(uv_async_init(as_uv_type(loop), this,AsyncCallbackRaw));
-		uv_async_init(as_uv_type(loop), &destructor_async_, DestructorCallbackRaw);
-		destructor_async_.data = this;
 
 
 	}
@@ -1183,13 +1153,7 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 		}
 	}
 
-	~ImpAsync(){
-		// Schedule the handle to be closed
-		if (!this->closed()){
-			uv_async_send(&destructor_async_);
-			
-		}
-	}
+
 
 };
 
@@ -1198,7 +1162,7 @@ struct ImpTimer :
 		typedef ImpHandleBase<uv_timer_t> imp_base_t;
 		use<ITimer> timer_self_;
 		use<TimerCallback> cb_;
-
+		CPPCOMPONENTS_LIBUV_RELEASE
 		static void TimerCallbackRaw(uv_timer_t* handle, int status){
 			auto& imp = *static_cast<ImpTimer*>(handle);
 			imp.cb_(imp.timer_self_, status);
@@ -1236,11 +1200,7 @@ struct ImpTimer :
 		throw_if_error(uv_timer_init(as_uv_type(loop), this));
 	}
 
-	~ImpTimer(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 
 };
@@ -1612,6 +1572,7 @@ struct ImpStdioContainer : implement_runtime_class<ImpStdioContainer, StdioConta
 struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_class<ImpProcess, Process_t>
 {
 	typedef ImpHandleBase<uv_process_t> imp_base_t;
+	CPPCOMPONENTS_LIBUV_RELEASE
 	use <ExitCallback> cb_;
 	use<IProcess> self_;
 	void Kill(int signum){
@@ -1690,11 +1651,7 @@ struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_
 		throw_if_error(uv_spawn(as_uv_type(loop), this, uvpo));
 		self_ = this->QueryInterface<IProcess>();
 	}
-	~ImpProcess(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 };
 
@@ -1893,6 +1850,7 @@ struct ImpFs : implement_runtime_class<ImpFs, Fs_t>{
 
 struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<uv_fs_poll_t>, implement_runtime_class<ImpFsPoll, FsPoll_t>{
 	typedef ImpHandleBase<uv_fs_poll_t> imp_base_t;
+	CPPCOMPONENTS_LIBUV_RELEASE
 	use<FsPollCallback> cb_;
 	use<IFsPoll> self_;
 
@@ -1926,11 +1884,7 @@ struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<uv_fs_poll_t>, implement_runtime_
 		throw_if_error(uv_fs_poll_init(as_uv_type(loop), this));
 	}
 
-	~ImpFsPoll(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 
 
@@ -1939,6 +1893,7 @@ struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<uv_fs_poll_t>, implement_runtime_
 
 struct ImpSignal :uv_signal_t,ImpHandleBase<uv_signal_t>, implement_runtime_class<ImpSignal, Signal_t>{
 	typedef ImpHandleBase<uv_signal_t> imp_base_t;
+	CPPCOMPONENTS_LIBUV_RELEASE
 
 	use<ISignal> self_;
 	use<SignalCallback> cb_;
@@ -1969,11 +1924,7 @@ struct ImpSignal :uv_signal_t,ImpHandleBase<uv_signal_t>, implement_runtime_clas
 		throw_if_error(uv_signal_init(as_uv_type(loop), this));
 	}
 
-	~ImpSignal(){
-		if (!this->closed()){
-			uv_close(this->handle_, nullptr);
-		}
-	}
+
 
 
 };
@@ -1983,7 +1934,7 @@ struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<uv_fs_event_t>
 	, implement_runtime_class<ImpFsEvent, FsEvent_t>{
 
 		typedef ImpHandleBase<uv_fs_event_t> imp_base_t;
-
+		CPPCOMPONENTS_LIBUV_RELEASE
 
 		use<FsEventCallback> cb_;
 		static void FsEventCallbackRaw(uv_fs_event_t* handle, const char* filename,
@@ -2002,11 +1953,7 @@ struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<uv_fs_event_t>
 			throw_if_error(uv_fs_event_init(as_uv_type(loop), this, filename.data(), FsEventCallbackRaw, flags));
 		}
 		
-		~ImpFsEvent(){
-			if (!this->closed()){
-				uv_close(this->handle_, nullptr);
-			}
-		}
+
 
 
 };
