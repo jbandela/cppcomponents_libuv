@@ -644,6 +644,7 @@ namespace cppcomponents_libuv{
 
 		use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback>);
 		void ListenRaw(int backlog, cppcomponents::use<ConnectionCallback>);
+		void ClearListener();
 		void Accept(use<IStream> client);
 
 		void ReadStartRaw(cppcomponents::use<ReadCallback>);
@@ -658,7 +659,7 @@ namespace cppcomponents_libuv{
 
 
 
-		CPPCOMPONENTS_CONSTRUCT(IStream, ShutdownRaw,ListenRaw,Accept,ReadStartRaw,ReadStop,Read2StartRaw,WriteRaw,
+		CPPCOMPONENTS_CONSTRUCT(IStream, ShutdownRaw,ListenRaw,ClearListener,Accept,ReadStartRaw,ReadStop,Read2StartRaw,WriteRaw,
 			Write2Raw,IsReadable,IsWritable,SetBlocking);
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(IStream){

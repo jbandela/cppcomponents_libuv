@@ -593,6 +593,9 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 	static void ConnectionCallbackRaw(uv_stream_t* server, int status){
 		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(server));
 		ImpStreamBase& imp = *derived;
+		if (!imp.connection_cb_){
+			return;
+		}
 		auto is = derived->template QueryInterface<clv::IStream>();
 		imp.connection_cb_(is,status);
 	}
@@ -601,6 +604,10 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 		connection_cb_ = cb; 
 		throw_if_error(uv_listen(this->get(), backlog, ConnectionCallbackRaw));
+	}
+
+	void ClearListener(){
+		connection_cb_ = nullptr; 
 	}
 
 	void Accept(use<clv::IStream> client){
