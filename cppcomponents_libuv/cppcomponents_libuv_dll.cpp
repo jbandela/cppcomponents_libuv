@@ -62,6 +62,8 @@ typedef runtime_class<dummyid, object_interfaces<IUdpSendRequest>> UdpSendReques
 typedef runtime_class<dummyid, object_interfaces<IFsRequest>> FsRequest_t;
 typedef runtime_class<dummyid, object_interfaces<IWorkRequest>> WorkRequest_t;
 
+#define SWALLOW_EXCEPTIONS(s)try{s;}catch(...){}
+
 template<class Derived, class RC>
 struct ImpRequest
 	: public implement_runtime_class<Derived, RC>
@@ -120,7 +122,7 @@ struct ImpGetAddrinfoRequest
 		auto& imp = *static_cast<ImpGetAddrinfoRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.cb_(s, status, res);
+		SWALLOW_EXCEPTIONS(imp.cb_(s, status, res));
 	}
 
 
@@ -156,7 +158,7 @@ struct ImpShutdownRequest
 		auto& imp = *static_cast<ImpShutdownRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.cb_(s, status);
+		SWALLOW_EXCEPTIONS(imp.cb_(s, status));
 	}
 
 
@@ -198,7 +200,7 @@ struct ImpWriteRequest
 		auto& imp = *static_cast<ImpWriteRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.cb_(s, status);
+		SWALLOW_EXCEPTIONS(imp.cb_(s, status));
 	}
 
 
@@ -232,7 +234,7 @@ struct ImpConnectRequest
 		auto& imp = *static_cast<ImpConnectRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.cb_(s, status);
+		SWALLOW_EXCEPTIONS(imp.cb_(s, status));
 	}
 
 
@@ -269,7 +271,7 @@ struct ImpUdpSendRequest
 		auto& imp = *static_cast<ImpUdpSendRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.cb_(s, status);
+		SWALLOW_EXCEPTIONS(imp.cb_(s, status));
 	}
 
 
@@ -326,7 +328,7 @@ struct ImpFsRequest
 		auto& imp = *static_cast<ImpFsRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.cb_(s);
+		SWALLOW_EXCEPTIONS(imp.cb_(s));
 	}
 
 
@@ -365,51 +367,38 @@ struct ImpWorkRequest
 	static void RequestCb(uv_work_t* req){
 		auto& imp = *static_cast<ImpWorkRequest*>(req->data);
 		auto s = imp.self_;
-		imp.cb_(s);
+		SWALLOW_EXCEPTIONS( imp.cb_(s));
 	}
 	static void AfterRequestCb(uv_work_t* req, int status){
 		auto& imp = *static_cast<ImpWorkRequest*>(req->data);
 		auto s = imp.self_;
 		imp.self_ = nullptr;
-		imp.awcb_(s, status);
+		SWALLOW_EXCEPTIONS(imp.awcb_(s, status));
 	}
 
 
 };
 
 
-//template<class DelegateType>
-//void* delegate_to_void(use<DelegateType> cb){
-//	return cb.get_portable_base_addref();
-//}
-//
-//inline void delate_void_cleanup(void* v){
-//	auto p = static_cast<portable_base*>(v);
-//	cross_compiler_interface::use_interface<cross_compiler_interface::InterfaceUnknown>(cross_compiler_interface::reinterpret_portable_base<cross_compiler_interface::InterfaceUnknown>(p));
-//
-//}
-//template<class DelegateType>
-//use<DelegateType> delegate_from_void(void* data){
-//	auto pb = static_cast<portable_base*>(data);
-//	use<DelegateType> cb(cppcomponents::reinterpret_portable_base<DelegateType::template Interface>(pb), true);
-//	return cb;
-//}
+
 
 
 typedef runtime_class<dummyid, object_interfaces<IHandle>, factory_interface<NoConstructorFactoryInterface>> Handle_t;
 
-template<class HType>
+template<class Derived, class HType>
 struct ImpHandleBase{
 
 	uv_handle_t* handle_;
-	bool closed_;
-	
+	bool close_called_ = false;
+	bool close_completed_ = false;
+	bool deleteonclose_ = false;
+	void* pcb_ = nullptr;
 
 	HType* get(){
 		return reinterpret_cast<HType*>(handle_);
 	}
 
-	ImpHandleBase(HType* h) : handle_{ reinterpret_cast<uv_handle_t*>(h) }, closed_{false}
+	ImpHandleBase(HType* h) : handle_{ reinterpret_cast<uv_handle_t*>(h) }
 	{}
 
 	int HandleType(){
@@ -421,19 +410,42 @@ struct ImpHandleBase{
 	}
 
 	static void CloseCallbackRaw(uv_handle_t *h){
-		use<CloseCallback> cb(cppcomponents::reinterpret_portable_base<CloseCallback>(static_cast<portable_base*>(h->data)),false);
+		auto pthis = static_cast<ImpHandleBase*>(h->data);
+		if (pthis->pcb_){
+			use<CloseCallback> cb(cppcomponents::reinterpret_portable_base<CloseCallback>(static_cast<portable_base*>(pthis->pcb_)), false);
+			SWALLOW_EXCEPTIONS(cb());
+		}
 		h->data = nullptr;
-		cb();
+		pthis->close_completed_ = true;
+		if (pthis->deleteonclose_){
+			delete static_cast<Derived*>(pthis);
+		}
+		else{
+			static_cast<Derived*>(pthis)->ResetCallbacks();
+		}
+	}
+	void ReleaseImplementationDestroy(){ 
+		if (close_completed_){
+			delete static_cast<Derived*>(this);
+		}
+		else if (close_called_){
+			deleteonclose_ = true;
+		}
+		else{
+			deleteonclose_ = true;
+			CloseRaw(nullptr);
+		}
 	}
 
+	void ResetCallbacks(){}
 
-
-	bool closed(){ return closed_; }
+	bool closed(){ return close_completed_; }
 
 	void CloseRaw(use<CloseCallback> cb){
-		if (closed_) return;
-		closed_ = true;
-		handle_->data = cb.get_portable_base_addref();
+		if (close_called_) return;
+		close_called_ = true;
+		handle_->data = this;
+		pcb_ = cb.get_portable_base_addref();
 		uv_close(handle_, CloseCallbackRaw);
 	}
 
@@ -459,16 +471,18 @@ struct ImpHandleBase{
 };
 
 struct ImpHandleNonOwning :
-	ImpHandleBase<uv_handle_t>,
+	ImpHandleBase<ImpHandleNonOwning,uv_handle_t>,
 	implement_runtime_class<ImpHandleNonOwning, Handle_t>{
 
 
 
 
-		ImpHandleNonOwning(uv_handle_t* h) : ImpHandleBase<uv_handle_t>(h)
+		ImpHandleNonOwning(uv_handle_t* h) : ImpHandleBase<ImpHandleNonOwning,uv_handle_t>(h)
 		{}
 
+		void ReleaseImplementationDestroy(){
 
+		}
 
 };
 
@@ -566,24 +580,21 @@ uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
 }
 
 template<class HType,class Derived>
-struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
+struct ImpStreamBase : ImpHandleBase<Derived,uv_stream_t>{
 
 
 	typedef cppcomponents::delegate < void(int) > ConnectionCallbackHelper;
 
 
-	//use<clv::IStream> istream_self_;
 	use<ConnectionCallback> connection_cb_;
 	use<ReadCallback> read_cb_;
 
 	bool reading_ = false;
 
-	void CloseRaw(use<CloseCallback> cb){
-		if (closed_) return;
-		closed_ = true;
-		handle_->data = cb.get_portable_base_addref();
-		uv_close(handle_, CloseCallbackRaw);
+
+	void ResetCallbacks(){
 		connection_cb_ = nullptr;
+		read_cb_ = nullptr;
 	}
 	use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback> cb){
 		use<clv::IStream> is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
@@ -597,7 +608,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 			return;
 		}
 		auto is = derived->template QueryInterface<clv::IStream>();
-		imp.connection_cb_(is,status);
+		SWALLOW_EXCEPTIONS( imp.connection_cb_(is,status));
 	}
 
 	void ListenRaw(int backlog, use<ConnectionCallback> cb){
@@ -624,7 +635,7 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(stream));
 		ImpStreamBase& imp = *derived;
 		auto is = derived->template QueryInterface<clv::IStream>();
-		imp.read_cb_(is, nread, b);
+		SWALLOW_EXCEPTIONS( imp.read_cb_(is, nread, b));
 		if (imp.reading_ == false){
 			imp.read_cb_ = nullptr;
 		}
@@ -728,35 +739,14 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 };
 
-	template<class T>
-	 void CloseCallbackDelete(uv_handle_t* h){
-		auto p = static_cast<T*>(h->data);
-		delete p;
-	}
 
-
-	 template<class T>
-	 void CloseAndDelete(T* pthis){
-		if(pthis->closed_ == true){
-			delete pthis;
-			return;
-		}
-		pthis->handle_->data = pthis;
-		pthis->closed_ = true;
-		uv_close(pthis->handle_, CloseCallbackDelete<T>);
-
-	 }
-
-
-#define CPPCOMPONENTS_LIBUV_RELEASE void ReleaseImplementationDestroy(){CloseAndDelete(this);}
 
 
 struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_runtime_class<ImpTcpStream, TcpStream_t>{
 
 	typedef ImpStreamBase<uv_tcp_t, ImpTcpStream> imp_base_t;
 
-	CPPCOMPONENTS_LIBUV_RELEASE
-
+	using imp_base_t::ReleaseImplementationDestroy;
 
 	ImpTcpStream(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_tcp_init(as_uv_type(loop), this));
@@ -813,12 +803,14 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement_runtime_class<ImpUdpStream, UdpStream_t>
 {
 	typedef ImpStreamBase<uv_udp_t, ImpUdpStream> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
 
-	CPPCOMPONENTS_LIBUV_RELEASE
 
-	// This keeps us alive during async requests
-	use<IUdpStream> self_;
 	use<UdpRecvCallback> cb_; 
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 
 	ImpUdpStream(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_udp_init(as_uv_type(loop), this));
@@ -878,7 +870,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 		b.len = buf.len;
 
 
-		imp.cb_(imp.self_, nread, b,addr,flags);
+		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IUdpStream>(), nread, b,addr,flags));
 
 		delete buf.base;
 	}
@@ -886,21 +878,18 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 
 	void RecvStart(cppcomponents::use<UdpRecvCallback> cb){
 		cb_ = cb;
-		self_ = this->QueryInterface<IUdpStream>();
 		try{
 			throw_if_error(uv_udp_recv_start(this, AllocCallbackRaw, RecvCallbackRaw));
 
 		}
 		catch (...){
-			self_ = nullptr;
 			cb_ = nullptr;
 			throw;
 		}
 	}
 	void RecvStop(){
-		self_ = nullptr;
-		cb_ = nullptr;
 		throw_if_error(uv_udp_recv_stop(this)); 
+		cb_ = nullptr;
 	}
 
 
@@ -910,7 +899,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement_runtime_class<ImpTtyStream, Tty_t>
 {
 	typedef ImpStreamBase<uv_tty_t, ImpTtyStream> imp_base_t;
-	CPPCOMPONENTS_LIBUV_RELEASE
+	using imp_base_t::ReleaseImplementationDestroy;
 
 
 	ImpTtyStream(use<ILoop> loop, FileOsType fd, bool readable)
@@ -942,8 +931,8 @@ struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement
 struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_class<ImpPipe, Pipe_t>
 {
 	typedef ImpStreamBase<uv_pipe_t, ImpPipe> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
 
-	CPPCOMPONENTS_LIBUV_RELEASE
 
 	ImpPipe(use<ILoop> loop, bool ipc) : imp_base_t(this)
 	{
@@ -971,13 +960,16 @@ struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_
 
 };
 
-struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<ImpPoll, Poll_t>
+struct ImpPoll : uv_poll_t, ImpHandleBase<ImpPoll,uv_poll_t>, implement_runtime_class<ImpPoll, Poll_t>
 {
-	typedef ImpHandleBase<uv_poll_t> imp_base_t;
-	CPPCOMPONENTS_LIBUV_RELEASE
+	typedef ImpHandleBase<ImpPoll,uv_poll_t> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
 
-	use<IPoll> poll_self_;
 	use<PollCallback> cb_; 
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 
 	ImpPoll(use<ILoop> loop, FileOsType file) : imp_base_t(this){
 		throw_if_error(uv_poll_init(as_uv_type(loop), this, file));
@@ -988,41 +980,42 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<uv_poll_t>, implement_runtime_class<Im
 
 	static void PollCallbackRaw(uv_poll_t* handle, int status, int events){
 		auto& imp = *static_cast<ImpPoll*>(handle);
-		imp.cb_(imp.poll_self_, status, events);
+		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IPoll>(), status, events));
 
 	}
 
 	void Start(int events, use<PollCallback> cb){
 		cb_ = cb;
-		poll_self_ = this->QueryInterface<IPoll>();
 		try{
 			throw_if_error(uv_poll_start(this, events,PollCallbackRaw));
 
 		}
 		catch (...){
-			poll_self_ = nullptr;
 			cb_ = nullptr;
 			throw;
 		}
 	}
 
 	void Stop(){
-		poll_self_ = nullptr;
-		cb_ = nullptr;
 		throw_if_error(uv_poll_stop(this));
+		cb_ = nullptr;
 	}
 
 	
 };
 
-struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime_class<ImpPrepare, Prepare_t>
+struct ImpPrepare : uv_prepare_t, ImpHandleBase<ImpPrepare,uv_prepare_t>, implement_runtime_class<ImpPrepare, Prepare_t>
 {
-	typedef ImpHandleBase<uv_prepare_t> imp_base_t;
+	typedef ImpHandleBase<ImpPrepare,uv_prepare_t> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
 
-	CPPCOMPONENTS_LIBUV_RELEASE
 
-	use<IPrepare> prepare_self_;
 	use<PrepareCallback> cb_;
+
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 
 	ImpPrepare(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_prepare_init(as_uv_type(loop), this));
@@ -1031,46 +1024,41 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 
 	static void PrepareCallbackRaw(uv_prepare_t* handle, int status){
 		auto& imp = *static_cast<ImpPrepare*>(handle);
-		imp.cb_(imp.prepare_self_, status);
+		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IPrepare>(), status));
 
 	}
 
 	void StartRaw(use<PrepareCallback> cb){
 		cb_ = cb;
-		prepare_self_ = this->QueryInterface<IPrepare>();
 		try{
 			throw_if_error(uv_prepare_start(this,  PrepareCallbackRaw));
 
 		}
 		catch (...){
-			prepare_self_ = nullptr;
 			cb_ = nullptr;
 			throw;
 		}
 	}
 
 	void Stop(){
-		prepare_self_ = nullptr;
-		cb_ = nullptr;
 		throw_if_error(uv_prepare_stop(this));
-	}
-
-	void CloseRaw(use<CloseCallback> cb){
-		prepare_self_ = nullptr;
 		cb_ = nullptr;
-		imp_base_t::CloseRaw(cb);
-
 	}
+
+
 
 };
 
-struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class<ImpCheck, Check_t>
+struct ImpCheck : uv_check_t, ImpHandleBase<ImpCheck, uv_check_t>, implement_runtime_class<ImpCheck, Check_t>
 {
-	typedef ImpHandleBase<uv_check_t> imp_base_t;
+	typedef ImpHandleBase<ImpCheck, uv_check_t> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
 
-	CPPCOMPONENTS_LIBUV_RELEASE
-	use<ICheck> check_self_;
 	use<CheckCallback> cb_;
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 
 	ImpCheck(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_check_init(as_uv_type(loop), this));
@@ -1079,40 +1067,41 @@ struct ImpCheck : uv_check_t, ImpHandleBase<uv_check_t>, implement_runtime_class
 
 	static void CheckCallbackRaw(uv_check_t* handle, int status){
 		auto& imp = *static_cast<ImpCheck*>(handle);
-		imp.cb_(imp.check_self_, status);
+		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<ICheck>(), status));
 
 	}
 
 	void Start(use<CheckCallback> cb){
 		cb_ = cb;
-		check_self_ = this->QueryInterface<ICheck>();
 		try{
 			throw_if_error(uv_check_start(this, CheckCallbackRaw));
 
 		}
 		catch (...){
-			check_self_ = nullptr;
 			cb_ = nullptr;
 			throw;
 		}
 	}
 
 	void Stop(){
-		check_self_ = nullptr;
-		cb_ = nullptr;
 		throw_if_error(uv_check_stop(this));
+		cb_ = nullptr;
 	}
 
 
 };
 
 
-struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<ImpIdle, Idle_t>
+struct ImpIdle : uv_idle_t, ImpHandleBase<ImpIdle,uv_idle_t>, implement_runtime_class<ImpIdle, Idle_t>
 {
-	typedef ImpHandleBase<uv_idle_t> imp_base_t;
-	CPPCOMPONENTS_LIBUV_RELEASE
-	use<IIdle> idle_self_;
+	typedef ImpHandleBase<ImpIdle, uv_idle_t> imp_base_t;	
+	using imp_base_t::ReleaseImplementationDestroy;
+
 	use<IdleCallback> cb_;
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 
 	ImpIdle(use<ILoop> loop) : imp_base_t(this){
 		throw_if_error(uv_idle_init(as_uv_type(loop), this));
@@ -1121,54 +1110,53 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<uv_idle_t>, implement_runtime_class<Im
 
 	static void IdleCallbackRaw(uv_idle_t* handle, int status){
 		auto& imp = *static_cast<ImpIdle*>(handle);
-		imp.cb_(imp.idle_self_, status);
+		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IIdle>(), status));
 
 	}
 
 	void Start(use<IdleCallback> cb){
 		cb_ = cb;
-		idle_self_ = this->QueryInterface<IIdle>();
 		try{
 			throw_if_error(uv_idle_start(this, IdleCallbackRaw));
 
 		}
 		catch (...){
-			idle_self_ = nullptr;
 			cb_ = nullptr;
 			throw;
 		}
 	}
 
 	void Stop(){
-		idle_self_ = nullptr;
 		throw_if_error(uv_idle_stop(this));
+		cb_ = nullptr;
 	}
+
+
 
 
 };
 
-struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class<ImpAsync, Async_t>
+struct ImpAsync : uv_async_t, ImpHandleBase<ImpAsync,uv_async_t>, implement_runtime_class<ImpAsync, Async_t>
 {
-	typedef ImpHandleBase<uv_async_t> imp_base_t;
-	CPPCOMPONENTS_LIBUV_RELEASE
-	// We cannot call close in another thread
-	// therefore we have an another async to help with destruction
+	typedef ImpHandleBase<ImpAsync,uv_async_t> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
 
-	//use<IAsync> async_self_;
-	use<AsyncCallback> callback_;
+
+	use<AsyncCallback> cb_;
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 
 	static void AsyncCallbackRaw(uv_async_t* handle, int status){
 		auto& imp = *static_cast<ImpAsync*>(handle);
-		if (imp.callback_){
-		imp.callback_(imp.QueryInterface<IAsync>(), status);
+		SWALLOW_EXCEPTIONS(imp.cb_(imp.QueryInterface<IAsync>(), status));
 
-		}
-		//imp.async_self_ = nullptr;
 	}
 
 
 
-	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),callback_(cb)
+	ImpAsync(use<ILoop> loop,use<AsyncCallback> cb) : imp_base_t(this),cb_(cb)
 	{
 		throw_if_error(uv_async_init(as_uv_type(loop), this,AsyncCallbackRaw));
 
@@ -1178,46 +1166,42 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 
 
 	void Send(){
-		try{
-			//async_self_ = this->QueryInterface<IAsync>();
-			throw_if_error(uv_async_send(this));
-		}
-		catch (...){
-			//async_self_ = nullptr;
-			throw;
-		}
+		throw_if_error(uv_async_send(this));
 	}
+
+
 
 
 };
 
 struct ImpTimer :
-	uv_timer_t, ImpHandleBase<uv_timer_t>, cppcomponents::implement_runtime_class<ImpTimer, Timer_t>{
-		typedef ImpHandleBase<uv_timer_t> imp_base_t;
-		use<ITimer> timer_self_;
+	uv_timer_t, ImpHandleBase<ImpTimer,uv_timer_t>, cppcomponents::implement_runtime_class<ImpTimer, Timer_t>{
+		typedef ImpHandleBase<ImpTimer,uv_timer_t> imp_base_t;
+		using imp_base_t::ReleaseImplementationDestroy;
+
 		use<TimerCallback> cb_;
-		CPPCOMPONENTS_LIBUV_RELEASE
+
+		void ResetCallbacks(){
+			cb_ = nullptr;
+		}
 		static void TimerCallbackRaw(uv_timer_t* handle, int status){
 			auto& imp = *static_cast<ImpTimer*>(handle);
-			imp.cb_(imp.timer_self_, status);
+			SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<ITimer>(), status));
 		}
 
 		void Start(cppcomponents::use<TimerCallback> cb, std::uint64_t timeout, std::uint64_t repeat){
 			try{
 				cb_ = cb;
-				timer_self_ = this->QueryInterface<ITimer>();
 
 				throw_if_error(uv_timer_start(this, TimerCallbackRaw, timeout, repeat));
 
 			}
 			catch (...){
-				timer_self_ = nullptr;
 				cb_ = nullptr;
 				throw;
 			}
 		}
 	void Stop(){
-		timer_self_ = nullptr;
 		throw_if_error(uv_timer_stop(this));
 	}
 	void Again(){
@@ -1489,6 +1473,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 struct ImpProcessOptions : implement_runtime_class<ImpProcessOptions, ProcessOptions_t>
 {
 	use<ExitCallback> exit_cb_;
+
 	uv_process_options_t p_;
 	void SetExitCallback(cppcomponents::use<ExitCallback> cb){
 		exit_cb_ = cb;
@@ -1603,12 +1588,16 @@ struct ImpStdioContainer : implement_runtime_class<ImpStdioContainer, StdioConta
 		: flags_{ 0 }, bstream_{ false }, fd_{ 0 }{}
 };
 
-struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_class<ImpProcess, Process_t>
+struct ImpProcess :uv_process_t, ImpHandleBase<ImpProcess,uv_process_t>, implement_runtime_class<ImpProcess, Process_t>
 {
-	typedef ImpHandleBase<uv_process_t> imp_base_t;
-	CPPCOMPONENTS_LIBUV_RELEASE
+	typedef ImpHandleBase<ImpProcess,uv_process_t> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
+
 	use <ExitCallback> cb_;
-	use<IProcess> self_;
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 	void Kill(int signum){
 		throw_if_error(uv_process_kill(this, signum));
 
@@ -1625,8 +1614,7 @@ struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_
 
 	static void ExitCallbackRaw(uv_process_t* p, int exit_status, int sig_term){
 		auto& imp = *static_cast<ImpProcess*>(p);
-		imp.cb_(imp.self_, exit_status, sig_term);
-		imp.self_ = nullptr;
+		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IProcess>(), exit_status, sig_term));
 	}
 
 	ImpProcess(use<ILoop> loop, use<IProcessOptions> po):imp_base_t{this}{
@@ -1683,9 +1671,7 @@ struct ImpProcess :uv_process_t, ImpHandleBase<uv_process_t>, implement_runtime_
 		}
 		uvpo.uid = po.GetUid();
 		throw_if_error(uv_spawn(as_uv_type(loop), this, uvpo));
-		self_ = this->QueryInterface<IProcess>();
 	}
-
 
 };
 
@@ -1882,35 +1868,36 @@ struct ImpFs : implement_runtime_class<ImpFs, Fs_t>{
 
 };
 
-struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<uv_fs_poll_t>, implement_runtime_class<ImpFsPoll, FsPoll_t>{
-	typedef ImpHandleBase<uv_fs_poll_t> imp_base_t;
-	CPPCOMPONENTS_LIBUV_RELEASE
+struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<ImpFsPoll,uv_fs_poll_t>, implement_runtime_class<ImpFsPoll, FsPoll_t>{
+	typedef ImpHandleBase<ImpFsPoll,uv_fs_poll_t> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
+
+
 	use<FsPollCallback> cb_;
-	use<IFsPoll> self_;
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 
 	static void PollCallbackRaw(uv_fs_poll_t* handle,int status,
 		const uv_stat_t* prev, const uv_stat_t* curr){
 		auto& imp = *static_cast<ImpFsPoll*>(handle);
 		static_assert(sizeof(cppcomponents_libuv::Stat)==sizeof(uv_stat_t),"Mismatch Stat, uv_stat_t");
-		imp.cb_(imp.QueryInterface<IFsPoll>(), status, reinterpret_cast<const Stat*>(prev),
-			reinterpret_cast<const Stat*>(curr));
+		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IFsPoll>(), status, reinterpret_cast<const Stat*>(prev),
+			reinterpret_cast<const Stat*>(curr)));
 	}
 	void Start(use<FsPollCallback> cb, cr_string path, unsigned int msinterval){
 		cb_ = cb;
-		self_ = this->QueryInterface<IFsPoll>();
 		try{
 			throw_if_error(uv_fs_poll_start(this, PollCallbackRaw, path.data(), msinterval));
 		}
 		catch (...){
-			cb_ = nullptr;
-			self_ = nullptr;
+			ResetCallbacks();
 			throw;
 		}
 	}
 	void Stop(){
-		self_ = nullptr;
 		throw_if_error(uv_fs_poll_stop(this));
-		cb_ = nullptr;
+		ResetCallbacks();
 	}
 
 	ImpFsPoll(use<ILoop> loop) : imp_base_t{ this }
@@ -1921,36 +1908,36 @@ struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<uv_fs_poll_t>, implement_runtime_
 
 
 
-
 };
 
 
-struct ImpSignal :uv_signal_t,ImpHandleBase<uv_signal_t>, implement_runtime_class<ImpSignal, Signal_t>{
-	typedef ImpHandleBase<uv_signal_t> imp_base_t;
-	CPPCOMPONENTS_LIBUV_RELEASE
+struct ImpSignal :uv_signal_t,ImpHandleBase<ImpSignal,uv_signal_t>, implement_runtime_class<ImpSignal, Signal_t>{
+	typedef ImpHandleBase<ImpSignal,uv_signal_t> imp_base_t;
+	using imp_base_t::ReleaseImplementationDestroy;
 
-	use<ISignal> self_;
 	use<SignalCallback> cb_;
+	
+
+	void ResetCallbacks(){
+		cb_ = nullptr;
+	}
 	static void SignalCallbackRaw(uv_signal_t* handle, int signum){
 		auto& imp = *static_cast<ImpSignal*>(handle);
-		imp.cb_(imp.QueryInterface<ISignal>(), signum);
+		SWALLOW_EXCEPTIONS(imp.cb_(imp.QueryInterface<ISignal>(), signum));
 	}
 	void Start(use<SignalCallback> cb, int signum){
 		cb_ = cb;
-		self_ = this->QueryInterface<ISignal>();
 		try{
 			throw_if_error(uv_signal_start(this, SignalCallbackRaw, signum));
 		}
 		catch (...){
-			cb_ = nullptr;
-			self_ = nullptr;
+			ResetCallbacks();
 			throw;
 		}
 	}
 	void Stop(){
-		self_ = nullptr;
 		throw_if_error(uv_signal_stop(this));
-		cb_ = nullptr;
+		ResetCallbacks();
 
 	}
 	ImpSignal(use<ILoop> loop) : imp_base_t{ this }
@@ -1964,18 +1951,22 @@ struct ImpSignal :uv_signal_t,ImpHandleBase<uv_signal_t>, implement_runtime_clas
 };
 
 
-struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<uv_fs_event_t>
+struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<ImpFsEvent,uv_fs_event_t>
 	, implement_runtime_class<ImpFsEvent, FsEvent_t>{
 
-		typedef ImpHandleBase<uv_fs_event_t> imp_base_t;
-		CPPCOMPONENTS_LIBUV_RELEASE
+		typedef ImpHandleBase<ImpFsEvent,uv_fs_event_t> imp_base_t;
+		using imp_base_t::ReleaseImplementationDestroy;
+
 
 		use<FsEventCallback> cb_;
+		void ResetCallbacks(){
+			cb_ = nullptr;
+		}
 		static void FsEventCallbackRaw(uv_fs_event_t* handle, const char* filename,
 			int events, int status){
 				auto& imp = *static_cast<ImpFsEvent*>(handle);
 				cr_string fname(filename);
-				imp.cb_(imp.QueryInterface<IFsEvent>(), fname,events,status);
+				SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IFsEvent>(), fname,events,status));
 
 		}
 
@@ -1987,6 +1978,7 @@ struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<uv_fs_event_t>
 			throw_if_error(uv_fs_event_init(as_uv_type(loop), this, filename.data(), FsEventCallbackRaw, flags));
 		}
 		
+
 
 
 
