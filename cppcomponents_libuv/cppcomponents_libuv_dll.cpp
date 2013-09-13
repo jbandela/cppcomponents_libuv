@@ -1189,7 +1189,7 @@ struct ImpTimer :
 			SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<ITimer>(), status));
 		}
 
-		void Start(cppcomponents::use<TimerCallback> cb, std::uint64_t timeout, std::uint64_t repeat){
+		void StartRaw(cppcomponents::use<TimerCallback> cb, std::uint64_t timeout, std::uint64_t repeat){
 			try{
 				cb_ = cb;
 

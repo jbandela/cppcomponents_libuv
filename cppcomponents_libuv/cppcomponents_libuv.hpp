@@ -1152,13 +1152,22 @@ namespace cppcomponents_libuv{
 			cppcomponents::uuid<0xccecc946, 0x1bcd, 0x48c8, 0x818a, 0xbd90445eee11	>
 		> TimerCallback;
 
-		void Start(cppcomponents::use<TimerCallback>,std::uint64_t timeout, std::uint64_t repeat);
+		void StartRaw(cppcomponents::use<TimerCallback>,std::uint64_t timeout, std::uint64_t repeat);
 		void Stop();
 		void Again();
 		void SetRepeat(std::uint64_t repeat);
 		std::uint64_t GetRepeat();
 
-		CPPCOMPONENTS_CONSTRUCT(ITimer,Start,Stop,Again,SetRepeat,GetRepeat);
+		CPPCOMPONENTS_CONSTRUCT(ITimer,StartRaw,Stop,Again,SetRepeat,GetRepeat);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ITimer){
+
+			template<class F>
+			void Start(F f, std::uint64_t timeout, std::uint64_t repeat){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<TimerCallback>(f), timeout, repeat);
+			}
+		};
+
 	};
 
 	typedef ITimer::TimerCallback TimerCallback;
