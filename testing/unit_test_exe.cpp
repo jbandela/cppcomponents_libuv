@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <crtdbg.h>
 #include <iostream>
-#define PPL_HELPER_OUTPUT_ENTER_EXIT
 namespace{
 	struct MemLeakCheckInit{
 		MemLeakCheckInit(){
