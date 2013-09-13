@@ -1124,6 +1124,16 @@ namespace cppcomponents_libuv{
 		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>, cppcomponents::use<AsyncCallback>);
 
 		CPPCOMPONENTS_CONSTRUCT(IAsyncFactory, Init);
+
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IAsyncFactory){
+
+			template<class F>
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(cppcomponents::use<ILoop> loop,F f){
+				return this->get_interface().Init(loop, cppcomponents::make_delegate<AsyncCallback>(f));
+			}
+
+		};
 	};
 
 

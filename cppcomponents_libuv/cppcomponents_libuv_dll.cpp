@@ -737,7 +737,10 @@ struct ImpStreamBase : ImpHandleBase<uv_stream_t>{
 
 	 template<class T>
 	 void CloseAndDelete(T* pthis){
-		if(pthis->closed_ == true) return;
+		if(pthis->closed_ == true){
+			delete pthis;
+			return;
+		}
 		pthis->handle_->data = pthis;
 		pthis->closed_ = true;
 		uv_close(pthis->handle_, CloseCallbackDelete<T>);
@@ -1052,7 +1055,12 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<uv_prepare_t>, implement_runtime
 		throw_if_error(uv_prepare_stop(this));
 	}
 
+	void CloseRaw(use<CloseCallback> cb){
+		prepare_self_ = nullptr;
+		cb_ = nullptr;
+		imp_base_t::CloseRaw(cb);
 
+	}
 
 };
 
@@ -1146,13 +1154,16 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 	// We cannot call close in another thread
 	// therefore we have an another async to help with destruction
 
-	use<IAsync> async_self_;
+	//use<IAsync> async_self_;
 	use<AsyncCallback> callback_;
 
 	static void AsyncCallbackRaw(uv_async_t* handle, int status){
 		auto& imp = *static_cast<ImpAsync*>(handle);
+		if (imp.callback_){
 		imp.callback_(imp.QueryInterface<IAsync>(), status);
-		imp.async_self_ = nullptr;
+
+		}
+		//imp.async_self_ = nullptr;
 	}
 
 
@@ -1168,15 +1179,14 @@ struct ImpAsync : uv_async_t, ImpHandleBase<uv_async_t>, implement_runtime_class
 
 	void Send(){
 		try{
-			async_self_ = this->QueryInterface<IAsync>();
+			//async_self_ = this->QueryInterface<IAsync>();
 			throw_if_error(uv_async_send(this));
 		}
 		catch (...){
-			async_self_ = nullptr;
+			//async_self_ = nullptr;
 			throw;
 		}
 	}
-
 
 
 };
