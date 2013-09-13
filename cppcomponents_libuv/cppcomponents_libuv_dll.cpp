@@ -416,12 +416,12 @@ struct ImpHandleBase{
 			SWALLOW_EXCEPTIONS(cb());
 		}
 		h->data = nullptr;
+		static_cast<Derived*>(pthis)->ResetCallbacks();
 		pthis->close_completed_ = true;
 		if (pthis->deleteonclose_){
 			delete static_cast<Derived*>(pthis);
 		}
 		else{
-			static_cast<Derived*>(pthis)->ResetCallbacks();
 		}
 	}
 	void ReleaseImplementationDestroy(){ 
@@ -1325,7 +1325,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 		return uv_guess_handle(file);
 	}
 
-	static use<IGetAddrinfoRequest> Getaddrinfo(cppcomponents::use<ILoop> loop, cppcomponents::use<GetAddrinfoCallback> cb, cppcomponents::cr_string node,
+	static use<IGetAddrinfoRequest> GetaddrinfoRaw(cppcomponents::use<ILoop> loop, cppcomponents::use<GetAddrinfoCallback> cb, cppcomponents::cr_string node,
 		cppcomponents::cr_string service, addrinfo* hints){
 			assure_null_terminated(node);
 			assure_null_terminated(service);

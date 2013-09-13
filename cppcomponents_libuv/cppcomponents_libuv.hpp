@@ -537,7 +537,7 @@ namespace cppcomponents_libuv{
 		std::size_t Strlcat(char* dst, const char* src, std::size_t size);
 		int GuessHandle(FileOsType file);
 
-		use<IGetAddrinfoRequest> Getaddrinfo(cppcomponents::use<ILoop>, cppcomponents::use<GetAddrinfoCallback>, cppcomponents::cr_string node,
+		use<IGetAddrinfoRequest> GetaddrinfoRaw(cppcomponents::use<ILoop>, cppcomponents::use<GetAddrinfoCallback>, cppcomponents::cr_string node,
 			cppcomponents::cr_string service, addrinfo* hints);
 
 		void Freeaddrinfo(addrinfo* ai);
@@ -578,12 +578,36 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_CONSTRUCT(IUvStatics, Version, VersionString,
 			Strerror, ErrName, HandleSize, ReqSize, BufInit, Strlcpy, Strlcat, GuessHandle,
-			Getaddrinfo, Freeaddrinfo, SetupArgs, GetProcessTitle, SetProcessTitle, ResidentSetMemory, Uptime,
+			GetaddrinfoRaw, Freeaddrinfo, SetupArgs, GetProcessTitle, SetProcessTitle, ResidentSetMemory, Uptime,
 			CpuInfo, InterfaceAddresses, Loadavg, Ip4Addr, Ip6Addr,
 			Ip4Name, Ip6Name, InetNtop, InetPton, Exepath, Cwd, Chdir,
 			GetFreeMemory, GetTotalMemory, Hrtime, DisableStdioInheritance
 
 			);
+
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IUvStatics){
+
+			cppcomponents::Future<addrinfo*> Getaddrinfo(cppcomponents::use<ILoop> loop,  cppcomponents::cr_string node,
+				cppcomponents::cr_string service, addrinfo* hints){
+
+					auto p = cppcomponents::make_promise<addrinfo*>();
+					auto f = [p](use<IGetAddrinfoRequest>, int status, addrinfo* res){
+						if (status < 0){
+							p.SetError(status);
+						}
+						else{
+							p.Set(res);
+						}
+					};
+
+					this->get_interface().GetaddrinfoRaw(loop, cppcomponents::make_delegate<GetAddrinfoCallback>(f), node, service, hints);
+
+					return p.QueryInterface < cppcomponents::IFuture<addrinfo*>();
+
+			}
+
+		};
 
 	};
 
@@ -644,14 +668,13 @@ namespace cppcomponents_libuv{
 
 		use<IShutdownRequest> ShutdownRaw(cppcomponents::use<ShutdownCallback>);
 		void ListenRaw(int backlog, cppcomponents::use<ConnectionCallback>);
-		void ClearListener();
 		void Accept(use<IStream> client);
 
 		void ReadStartRaw(cppcomponents::use<ReadCallback>);
 		void ReadStop();
 		void Read2StartRaw(cppcomponents::use<Read2Callback>);
-		use<IWriteRequest> WriteRaw(Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
-		use<IWriteRequest> Write2Raw(Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
+		use<IWriteRequest> WriteRaw(cppcomponents_libuv::Buffer* bufs, int bufcnt, cppcomponents::use<WriteCallback>);
+		use<IWriteRequest> Write2Raw(cppcomponents_libuv::Buffer* bufs, int bufcnt, cppcomponents::use <IStream>, cppcomponents::use<WriteCallback>);
 		bool IsReadable();
 		bool IsWritable();
 		void SetBlocking(bool blocking);
@@ -659,7 +682,7 @@ namespace cppcomponents_libuv{
 
 
 
-		CPPCOMPONENTS_CONSTRUCT(IStream, ShutdownRaw,ListenRaw,ClearListener,Accept,ReadStartRaw,ReadStop,Read2StartRaw,WriteRaw,
+		CPPCOMPONENTS_CONSTRUCT(IStream, ShutdownRaw,ListenRaw,Accept,ReadStartRaw,ReadStop,Read2StartRaw,WriteRaw,
 			Write2Raw,IsReadable,IsWritable,SetBlocking);
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(IStream){
@@ -679,6 +702,31 @@ namespace cppcomponents_libuv{
 			void Listen(int backlog, F f){
 				this->get_interface().ListenRaw(backlog, cppcomponents::make_delegate<ConnectionCallback>(f));
 
+			}
+
+			cppcomponents::Channel<cppcomponents::use<IStream>> GetListenChannel(int backlog){
+				typedef cppcomponents::use<IStream> c_t;
+				auto chan = cppcomponents::make_channel < c_t>();
+
+
+				auto stream = this->get_interface().QueryInterface<IStream>();
+				chan.SetOnClosed([stream](){});
+				auto f = [chan](use<IStream> stream, int status)mutable{
+					if (!chan)return;
+					if (status >= 0){
+						chan.Write(stream);
+					}
+					else{
+						chan.WriteError(status);
+						chan.Close();
+						chan = nullptr;
+					}
+				};
+
+
+				Listen(backlog,f);
+
+				return chan;
 			}
 			template<class F>
 			void ReadStart(F f){

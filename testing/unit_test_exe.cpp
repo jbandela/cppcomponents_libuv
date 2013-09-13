@@ -212,3 +212,52 @@ TEST_CASE("test-connection-fail", "test-connection-fail"){
 	test_impl_connection_fail_doesnt_auto_close();
 
 }
+
+TEST_CASE("Listener_read", "Listener_reader"){
+
+		auto loop = luv::Loop::DefaultLoop();
+
+	auto f = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+		use<luv::ITcpStream> server = luv::TcpStream{ loop };
+		auto server_addr = luv::Uv::Ip4Addr("127.0.0.1", TEST_PORT);
+
+		server.Bind(server_addr);
+		auto chan = server.GetListenChannel(1);
+
+		for (int i = 0; i < 2; i++){
+			auto fut = await.as_future(chan.Read());
+			if (fut.ErrorCode()) break;
+			auto stream = fut.Get();
+			luv::TcpStream client{ loop };
+			stream.Accept(client);
+			auto readchan = client.GetReadChannel();
+
+			while (true){
+				auto fut = await.as_future(readchan.Read());
+				if (fut.ErrorCode()) break;
+				auto buf = fut.Get();
+				std::string s{ buf.Begin(), buf.End() };
+				std::cerr << s;
+				std::string response =R"(HTTP/1.1 200 OK
+Date: Fri, 31 Dec 1999 23:59:59 GMT
+Content-Type: text/plain
+Content-Length: 42
+some-footer: some-value
+another-footer: another-value
+
+abcdefghijklmnopqrstuvwxyz1234567890abcdef)";
+				await(client.Write(response));
+			}
+
+		}
+		server.Close();
+
+	});
+
+	f();
+	loop.Run();
+
+
+	
+
+}
