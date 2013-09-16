@@ -214,13 +214,13 @@ TEST_CASE("test-connection-fail", "test-connection-fail"){
 
 }
 
-TEST_CASE("Listener_read", "Listener_reader"){
+TEST_CASE("TCP", "TcpStream"){
 
 	auto loop = luv::Loop::DefaultLoop();
 
 
 
-		use<luv::ITcpStream> server = luv::TcpStream{ loop };
+		luv::TcpStream server{ loop };
 
 		auto server_addr = luv::Uv::Ip4Addr("0.0.0.0", TEST_PORT);
 
@@ -245,7 +245,7 @@ TEST_CASE("Listener_read", "Listener_reader"){
 				std::string s{ buf.Begin(), buf.End() };
 				REQUIRE(s == "Hello");
 				std::stringstream strstream;
-				strstream << "Hi " << k;
+				strstream << "Hi " << k++;
 				std::string response = strstream.str();
 				await(client.Write(response));
 			}
@@ -262,6 +262,10 @@ TEST_CASE("Listener_read", "Listener_reader"){
 				auto buf = await(chan.Read());
 				std::string response{ buf.Begin(), buf.End() };
 				REQUIRE(std::string("Hi 0") == response);
+				await(client.Write(std::string("Hello")));
+				buf = await(chan.Read());
+				response.assign( buf.Begin(), buf.End() );
+				REQUIRE(std::string("Hi 1") == response);
 			}
 
 
