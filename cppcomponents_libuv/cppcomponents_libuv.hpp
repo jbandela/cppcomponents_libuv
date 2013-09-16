@@ -603,7 +603,7 @@ namespace cppcomponents_libuv{
 
 					this->get_interface().GetaddrinfoRaw(loop, cppcomponents::make_delegate<GetAddrinfoCallback>(f), node, service, hints);
 
-					return p.QueryInterface < cppcomponents::IFuture<addrinfo*>();
+					return p.QueryInterface < cppcomponents::IFuture<addrinfo*>>();
 
 			}
 
@@ -692,7 +692,7 @@ namespace cppcomponents_libuv{
 
 				auto f = [p](use<IShutdownRequest>, int s){
 					p.Set(s);
-				}
+				};
 				this->get_interface().ShutdownRaw(cppcomponents::make_delegate<ShutdownCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<int>>();
@@ -773,7 +773,7 @@ namespace cppcomponents_libuv{
 			template<std::size_t N>
 			cppcomponents::use<cppcomponents::IFuture<int>> Write(const char (&ar)[N]){
 				Buffer b;
-				b.base = const_cast<char*>(&a[0]);
+				b.base = const_cast<char*>(&ar[0]);
 				b.len = N;
 				
 				return Write(&b, 1);

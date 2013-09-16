@@ -622,7 +622,7 @@ struct ImpStreamBase : ImpHandleBase<Derived,uv_stream_t>{
 	}
 
 	void Accept(use<clv::IStream> client){
-		throw_if_error(uv_accept(get(), as_uv_type(client)));
+		throw_if_error(uv_accept(this->get(), as_uv_type(client)));
 	}
 
 	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
@@ -733,7 +733,7 @@ struct ImpStreamBase : ImpHandleBase<Derived,uv_stream_t>{
 		uv_stream_set_blocking(this->get(), blocking);
 	}
 
-	ImpStreamBase(HType* h) : ImpHandleBase(reinterpret_cast<uv_stream_t*>(h)){}
+	ImpStreamBase(HType* h) : ImpHandleBase<Derived, uv_stream_t>(reinterpret_cast<uv_stream_t*>(h)){}
 
 
 

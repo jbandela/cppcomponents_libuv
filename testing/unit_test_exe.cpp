@@ -226,8 +226,6 @@ TEST_CASE("TCP", "TcpStream"){
 
 		server.Bind(server_addr);
 
-		int i = 0;
-
 		server.Listen(1,cppcomponents::resumable<void>([&](use<luv::IStream> stream, int,cppcomponents::awaiter<void> await){
 
 
