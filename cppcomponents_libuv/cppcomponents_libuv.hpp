@@ -704,22 +704,17 @@ namespace cppcomponents_libuv{
 
 			}
 
-			cppcomponents::Channel<cppcomponents::use<IStream>> GetListenChannel(int backlog){
+			cppcomponents::Channel<cppcomponents::use<IStream>> ListenWithChannel(int backlog){
 				typedef cppcomponents::use<IStream> c_t;
 				auto chan = cppcomponents::make_channel < c_t>();
 
 
-				auto stream = this->get_interface().QueryInterface<IStream>();
-				chan.SetOnClosed([stream](){});
-				auto f = [chan](use<IStream> stream, int status)mutable{
-					if (!chan)return;
+				auto f = [chan](use<IStream> stream, int status){
 					if (status >= 0){
 						chan.Write(stream);
 					}
 					else{
 						chan.WriteError(status);
-						chan.Close();
-						chan = nullptr;
 					}
 				};
 
@@ -733,22 +728,17 @@ namespace cppcomponents_libuv{
 				this->get_interface().ReadStartRaw(cppcomponents::make_delegate<ReadCallback>(f));
 			}
 
-			cppcomponents::Channel<cppcomponents::use<cppcomponents::IBuffer>> GetReadChannel(){
+			cppcomponents::Channel<cppcomponents::use<cppcomponents::IBuffer>> ReadStartWithChannel(){
 				typedef cppcomponents::use<cppcomponents::IBuffer> c_t;
 				auto chan = cppcomponents::make_channel < c_t>();
 
 
-				auto stream = this->get_interface().QueryInterface<IStream>();
-				chan.SetOnClosed([stream]()mutable{stream.ReadStop(); stream = nullptr; });
-				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer> buf)mutable{
-					if (!chan)return;
+				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer> buf){
 					if (nread >= 0){
 						chan.Write(buf);
 					}
 					else{
 						chan.WriteError(nread);
-						chan.Close();
-						chan = nullptr;
 					}
 				};
 

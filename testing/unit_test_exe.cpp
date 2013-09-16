@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <crtdbg.h>
 #include <iostream>
+#include <sstream>
 namespace{
 	struct MemLeakCheckInit{
 		MemLeakCheckInit(){
@@ -215,50 +216,61 @@ TEST_CASE("test-connection-fail", "test-connection-fail"){
 
 TEST_CASE("Listener_read", "Listener_reader"){
 
-		auto loop = luv::Loop::DefaultLoop();
+	auto loop = luv::Loop::DefaultLoop();
+
+
 
 		use<luv::ITcpStream> server = luv::TcpStream{ loop };
 
-		auto server_addr = luv::Uv::Ip4Addr("127.0.0.1", TEST_PORT);
+		auto server_addr = luv::Uv::Ip4Addr("0.0.0.0", TEST_PORT);
 
 		server.Bind(server_addr);
 
 		int i = 0;
 
 		server.Listen(1,cppcomponents::resumable<void>([&](use<luv::IStream> stream, int,cppcomponents::awaiter<void> await){
-			++i;
-			if (i >= 4){
-				server.Close();
-				return;
-			}
+
 
 			luv::TcpStream client{ loop };
 			stream.Accept(client);
-			auto readchan = client.GetReadChannel();
+			auto readchan = client.ReadStartWithChannel();
 
+			int k = 0;
 			while (true){
 				auto fut = await.as_future(readchan.Read());
-				if (fut.ErrorCode()) break;
+				if (fut.ErrorCode()){
+					break;
+				}
 				auto buf = fut.Get();
 				std::string s{ buf.Begin(), buf.End() };
-				std::cerr << s;
-				std::string response = R"(HTTP/1.1 200 OK
-Date: Fri, 31 Dec 1999 23:59:59 GMT
-Content-Type: text/plain
-Content-Length: 42
-some-footer: some-value
-another-footer: another-value
-
-abcdefghijklmnopqrstuvwxyz1234567890abcdef)";
+				REQUIRE(s == "Hello");
+				std::stringstream strstream;
+				strstream << "Hi " << k;
+				std::string response = strstream.str();
 				await(client.Write(response));
 			}
-
 		}));
 
 
+		auto client_func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+			for (int i = 0; i < 4; i++){
+				auto client_address = luv::Uv::Ip4Addr("127.0.0.1", TEST_PORT);
+				luv::TcpStream client{ loop };
+				await(client.Connect(client_address));
+				auto chan = client.ReadStartWithChannel();
+				await(client.Write(std::string("Hello")));
+				auto buf = await(chan.Read());
+				std::string response{ buf.Begin(), buf.End() };
+				REQUIRE(std::string("Hi 0") == response);
+			}
 
 
+			server.Close();
 
+
+		});
+
+		client_func();
 	loop.Run();
 
 	
