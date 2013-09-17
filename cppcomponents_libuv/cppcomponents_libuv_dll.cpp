@@ -976,12 +976,17 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<ImpPoll,uv_poll_t>, implement_runtime_
 		cb_ = nullptr;
 	}
 
-	ImpPoll(use<ILoop> loop, FileOsType file) : imp_base_t(this){
-		throw_if_error(uv_poll_init(as_uv_type(loop), this, file));
+	ImpPoll(use<ILoop> loop, std::int64_t fileorsocket, bool isfile) : imp_base_t(this){
+		if (isfile){
+			throw_if_error(uv_poll_init(as_uv_type(loop), this, static_cast<FileOsType>(fileorsocket)));
+
+		}
+		else{
+		throw_if_error(uv_poll_init_socket(as_uv_type(loop), this, static_cast<uv_os_sock_t>(fileorsocket)));
+
+		}
 	}
-	ImpPoll(use<ILoop> loop, SocketOsType sock) : imp_base_t(this){
-		throw_if_error(uv_poll_init_socket(as_uv_type(loop), this, static_cast<uv_os_sock_t>(sock)));
-	}
+
 
 	static void PollCallbackRaw(uv_poll_t* handle, int status, int events){
 		auto& imp = *static_cast<ImpPoll*>(handle);

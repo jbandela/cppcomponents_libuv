@@ -1058,11 +1058,10 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid
 		< 0x7f35a833 , 0xf555 , 0x4582 , 0x8e02 , 0x080a6c36f528		>>
 	{
-		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>, FileOsType file);
-		cppcomponents::use<cppcomponents::InterfaceUnknown> InitSocket(cppcomponents::use<ILoop>, SocketOsType socket);
+		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>, std::int64_t fileorsocket, bool isfile);
 
 
-		CPPCOMPONENTS_CONSTRUCT(IPollFactory, Init,InitSocket);
+		CPPCOMPONENTS_CONSTRUCT(IPollFactory, Init);
 	};
 
 	inline std::string PollId(){ return "cppcomponents_libuv_dll!Poll"; }
