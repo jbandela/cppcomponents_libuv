@@ -567,15 +567,14 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 };
 
 
-uv_buf_t AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size){
+void AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size, uv_buf_t* ret){
 	try{
 		auto buf = cppcomponents::Buffer::Create(suggested_size);
-		 auto ret = uv_buf_init(buf.Begin(),suggested_size);
+		 *ret = uv_buf_init(buf.Begin(),suggested_size);
 		 buf.get_portable_base_addref();
-		 return ret;
 	}
 	catch (std::exception&){
-		return uv_buf_init(nullptr, 0);
+		*ret = uv_buf_init(nullptr, 0);
 	}
 }
 
@@ -625,9 +624,9 @@ struct ImpStreamBase : ImpHandleBase<Derived,uv_stream_t>{
 		throw_if_error(uv_accept(this->get(), as_uv_type(client)));
 	}
 
-	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf){
+	static void ReadCallbackRaw(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf){
 		//auto ibuf = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
-		auto b = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
+		auto b = cppcomponents::Buffer::OwningIBufferFromPointer(buf->base);
 		if (nread >= 0){
 			b.SetSize(nread);
 		}
@@ -769,11 +768,13 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 	}
 
 	void Bind(sockaddr_in in){
-		throw_if_error(uv_tcp_bind(this, in));
+		auto pin = reinterpret_cast<sockaddr*>(&in);
+		throw_if_error(uv_tcp_bind(this, pin));
 	}
 
 	void Bind6(sockaddr_in6 in6){
-		throw_if_error(uv_tcp_bind6(this, in6));
+		auto pin = reinterpret_cast<sockaddr*>(&in6);
+		throw_if_error(uv_tcp_bind(this, pin));
 	}
 
 	void Getsockname(sockaddr* name, int* namelen){
@@ -786,13 +787,15 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 	}
 
 	use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback> cb){
+		auto pin = reinterpret_cast<sockaddr*>(&address);
 		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
-		throw_if_error(uv_tcp_connect(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
+		throw_if_error(uv_tcp_connect(as_uv_type(cr), this, pin, ImpConnectRequest::RequestCb));
 		return cr;
 	}
 	use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback> cb){
+		auto pin = reinterpret_cast<sockaddr*>(&address);
 		auto cr = ImpConnectRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IConnectRequest>();
-		throw_if_error(uv_tcp_connect6(as_uv_type(cr), this, address, ImpConnectRequest::RequestCb));
+		throw_if_error(uv_tcp_connect(as_uv_type(cr), this, pin, ImpConnectRequest::RequestCb));
 		return cr;
 	}
 
@@ -821,10 +824,10 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 		throw_if_error(uv_udp_open(this, static_cast<uv_os_sock_t>(sock)));
 	}
 	void Bind(sockaddr_in in, std::uint32_t flags){
-		throw_if_error(uv_udp_bind(this, in, flags));
+		throw_if_error(uv_udp_bind(this, reinterpret_cast<sockaddr*>(&in), flags));
 	}
 	void Bind6(sockaddr_in6 in, std::uint32_t flags){
-		throw_if_error(uv_udp_bind6(this, in, flags));
+		throw_if_error(uv_udp_bind(this, reinterpret_cast<sockaddr*>(&in), flags));
 	}
 	void GetSockname(sockaddr* name, int* namelen){
 		throw_if_error(uv_udp_getsockname(this, name, namelen));
@@ -851,28 +854,30 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 		cppcomponents::use<UdpSendCallback> cb){
 			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
 			throw_if_error(uv_udp_send(as_uv_type(sr), this,
-				as_uv_type(bufs),buffcnt, addr, ImpUdpSendRequest::RequestCb));
+				as_uv_type(bufs),buffcnt, reinterpret_cast<sockaddr*>(&addr), ImpUdpSendRequest::RequestCb));
 			return sr;
 	}
 	use<IUdpSendRequest> Send6(clv::Buffer* bufs, int buffcnt, sockaddr_in6 addr,
 		cppcomponents::use<UdpSendCallback> cb){
 			auto sr = ImpUdpSendRequest::create(cb, this->QueryInterface<clv::IStream>()).QueryInterface<IUdpSendRequest>();
-			throw_if_error(uv_udp_send6(as_uv_type(sr), this,
-				as_uv_type(bufs), buffcnt, addr, ImpUdpSendRequest::RequestCb));
+			throw_if_error(uv_udp_send(as_uv_type(sr), this,
+				as_uv_type(bufs), buffcnt, reinterpret_cast<sockaddr*>(&addr), ImpUdpSendRequest::RequestCb));
 			return sr;
 	}
-	static void RecvCallbackRaw(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
-	struct sockaddr* addr, unsigned flags){
+
+
+	static void RecvCallbackRaw(uv_udp_t* handle, ssize_t nread,const uv_buf_t* buf,
+	const struct sockaddr* addr, unsigned flags){
 		auto& imp = *static_cast <ImpUdpStream*>(handle);
 
 		clv::Buffer b;
-		b.base = buf.base;
-		b.len = buf.len;
+		b.base = buf->base;
+		b.len = buf->len;
 
 
 		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IUdpStream>(), nread, b,addr,flags));
 
-		delete buf.base;
+		delete buf->base;
 	}
 
 
@@ -1408,11 +1413,16 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 
 	static sockaddr_in Ip4Addr(cr_string ip, int port){
 		assure_null_terminated(ip);
-		return uv_ip4_addr(ip.data(), port);
+		sockaddr_in ret{};
+		throw_if_error(uv_ip4_addr(ip.data(), port,&ret));
+		return ret;
 	}
 	static sockaddr_in6 Ip6Addr(cr_string ip, int port){
 		assure_null_terminated(ip);
-		return uv_ip6_addr(ip.data(), port);
+		sockaddr_in6 ret{};
+		throw_if_error(uv_ip6_addr(ip.data(), port,&ret));
+		return ret;
+
 	}
 
 	static std::string Ip4Name(sockaddr_in* src){
@@ -1614,7 +1624,7 @@ struct ImpProcess :uv_process_t, ImpHandleBase<ImpProcess,uv_process_t>, impleme
 	}
 
 
-	static void ExitCallbackRaw(uv_process_t* p, int exit_status, int sig_term){
+	static void ExitCallbackRaw(uv_process_t* p, int64_t exit_status, int sig_term){
 		auto& imp = *static_cast<ImpProcess*>(p);
 		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IProcess>(), exit_status, sig_term));
 	}
@@ -1672,7 +1682,7 @@ struct ImpProcess :uv_process_t, ImpHandleBase<ImpProcess,uv_process_t>, impleme
 			uvpo.stdio_count = uvstdio.size();
 		}
 		uvpo.uid = po.GetUid();
-		throw_if_error(uv_spawn(as_uv_type(loop), this, uvpo));
+		throw_if_error(uv_spawn(as_uv_type(loop), this, &uvpo));
 	}
 
 };

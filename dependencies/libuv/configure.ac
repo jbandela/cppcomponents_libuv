@@ -13,9 +13,10 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 AC_PREREQ(2.57)
-AC_INIT([libuv], [0.11.5], [https://github.com/joyent/libuv/issues])
-AM_INIT_AUTOMAKE([foreign serial-tests subdir-objects -Wall -Werror])
+AC_INIT([libuv], [0.11.14], [https://github.com/joyent/libuv/issues])
 AC_CONFIG_MACRO_DIR([m4])
+m4_include([m4/libuv-extra-automake-flags.m4])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects] UV_EXTRA_AUTOMAKE_FLAGS)
 AC_CANONICAL_HOST
 AC_ENABLE_SHARED
 AC_ENABLE_STATIC
@@ -43,6 +44,7 @@ AM_CONDITIONAL([LINUX],   [AS_CASE([$host_os], [linux*],   [true], [false])])
 AM_CONDITIONAL([NETBSD],  [AS_CASE([$host_os], [netbsd*],  [true], [false])])
 AM_CONDITIONAL([OPENBSD], [AS_CASE([$host_os], [openbsd*], [true], [false])])
 AM_CONDITIONAL([SUNOS],   [AS_CASE([$host_os], [solaris*], [true], [false])])
+AM_CONDITIONAL([WINNT],   [AS_CASE([$host_os], [mingw*],   [true], [false])])
 PANDORA_ENABLE_DTRACE
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

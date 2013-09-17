@@ -8,7 +8,7 @@ namespace{
 	struct MemLeakCheckInit{
 		MemLeakCheckInit(){
 			_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-			_crtBreakAlloc = 3562;
+			//_crtBreakAlloc = 3562;
 		}
 	};
 

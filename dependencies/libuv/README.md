@@ -62,41 +62,46 @@ To build with autotools:
     $ make check
     $ make install
 
-To build with Visual Studio run the vcbuild.bat file which will
-checkout the GYP code into build/gyp and generate the uv.sln and
-related files.
+### Windows
 
-Windows users can also build from the command line using msbuild.
-This is done by running vcbuild.bat from Visual Studio command prompt.
+First, Python 2.6 or 2.7 must be installed as it is required by [GYP][].
 
-To have GYP generate build script for another system, make sure that
-you have Python 2.6 or 2.7 installed, then checkout GYP into the
+Also, the directory for the preferred Python executable must be specified
+by the `PYTHON` or `Path` environment variables.
+
+To build with Visual Studio, launch a git shell (e.g. Cmd or PowerShell)
+and run vcbuild.bat which will checkout the GYP code into build/gyp and
+generate uv.sln as well as related project files.
+
+To have GYP generate build script for another system, checkout GYP into the
 project tree manually:
 
     $ mkdir -p build
     $ git clone https://git.chromium.org/external/gyp.git build/gyp
 
-Unix users run:
+### Unix
+
+Run:
 
     $ ./gyp_uv -f make
     $ make -C out
 
-Macintosh users run:
+### OS X
+
+Run:
 
     $ ./gyp_uv -f xcode
     $ xcodebuild -project uv.xcodeproj -configuration Release -target All
 
-To build for android:
+### Android
+
+Run:
 
     $ source ./android-configure NDK_PATH gyp
     $ make -C out
 
 Note for UNIX users: compile your project with `-D_LARGEFILE_SOURCE` and
 `-D_FILE_OFFSET_BITS=64`. GYP builds take care of that automatically.
-
-Note for Linux users: compile your project with `-D_GNU_SOURCE` when you
-include `uv.h`. GYP builds take care of that automatically. If you use
-autotools, add a `AC_GNU_SOURCE` declaration to your `configure.ac`.
 
 ## Supported Platforms
 
@@ -107,7 +112,7 @@ Studio license.
 
 Linux using the GCC toolchain.
 
-MacOS using the GCC or XCode toolchain.
+OS X using the GCC or XCode toolchain.
 
 Solaris 121 and later using GCC toolchain.
 

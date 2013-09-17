@@ -59,9 +59,6 @@
 # define UV_IO_PRIVATE_PLATFORM_FIELDS /* empty */
 #endif
 
-#define UV_IO_PRIVATE_FIELDS                                                  \
-  UV_IO_PRIVATE_PLATFORM_FIELDS                                               \
-
 struct uv__io_s;
 struct uv__async;
 struct uv_loop_s;
@@ -78,7 +75,7 @@ struct uv__io_s {
   unsigned int pevents; /* Pending event mask i.e. mask at next tick. */
   unsigned int events;  /* Current event mask. */
   int fd;
-  UV_IO_PRIVATE_FIELDS
+  UV_IO_PRIVATE_PLATFORM_FIELDS
 };
 
 typedef void (*uv__async_cb)(struct uv_loop_s* loop,
@@ -131,7 +128,7 @@ typedef pthread_mutex_t uv_mutex_t;
 typedef pthread_rwlock_t uv_rwlock_t;
 typedef UV_PLATFORM_SEM_T uv_sem_t;
 typedef pthread_cond_t uv_cond_t;
-
+typedef pthread_key_t uv_key_t;
 
 #if defined(__APPLE__) && defined(__MACH__)
 
@@ -199,9 +196,9 @@ typedef struct {
 
 #define UV_WRITE_PRIVATE_FIELDS                                               \
   void* queue[2];                                                             \
-  int write_index;                                                            \
+  unsigned int write_index;                                                   \
   uv_buf_t* bufs;                                                             \
-  int bufcnt;                                                                 \
+  unsigned int nbufs;                                                         \
   int error;                                                                  \
   uv_buf_t bufsml[4];                                                         \
 
@@ -213,7 +210,7 @@ typedef struct {
 #define UV_UDP_SEND_PRIVATE_FIELDS                                            \
   void* queue[2];                                                             \
   struct sockaddr_in6 addr;                                                   \
-  int bufcnt;                                                                 \
+  unsigned int nbufs;                                                         \
   uv_buf_t* bufs;                                                             \
   ssize_t status;                                                             \
   uv_udp_send_cb send_cb;                                                     \

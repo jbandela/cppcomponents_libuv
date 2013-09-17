@@ -932,7 +932,7 @@ namespace cppcomponents_libuv{
 		> UdpSendCallback;
 
 		typedef cppcomponents::delegate < void (use<IUdpStream>, std::ptrdiff_t nread,
-			Buffer buf, sockaddr* addr, unsigned int flags),
+			Buffer buf, const sockaddr* addr, unsigned int flags),
 			cppcomponents::uuid<0x62a0f712, 0x99f5, 0x4a09, 0x9d00, 0x2ec1b2dd6cea>
 		> UdpRecvCallback;
 
@@ -1262,7 +1262,7 @@ namespace cppcomponents_libuv{
 	};
 
 
-	typedef cppcomponents::delegate < void(use<IProcess>, int status, int term_signal),
+	typedef cppcomponents::delegate < void(use<IProcess>, int64_t status, int term_signal),
 		cppcomponents::uuid<0xa585d683, 0x22eb, 0x453d, 0xbcc4, 0x79d4c328afb1>
 	> ExitCallback;
 

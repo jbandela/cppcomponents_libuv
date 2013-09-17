@@ -42,27 +42,35 @@
 
 
 #define QUEUE_FS_TP_JOB(loop, req)                                          \
-  if (!QueueUserWorkItem(&uv_fs_thread_proc,                                \
-                         req,                                               \
-                         WT_EXECUTEDEFAULT)) {                              \
-    return uv_translate_sys_error(GetLastError());                          \
-  }                                                                         \
-  uv__req_register(loop, req);
+  do {                                                                      \
+    if (!QueueUserWorkItem(&uv_fs_thread_proc,                              \
+                           req,                                             \
+                           WT_EXECUTEDEFAULT)) {                            \
+      return uv_translate_sys_error(GetLastError());                        \
+    }                                                                       \
+    uv__req_register(loop, req);                                            \
+  } while (0)
 
 #define SET_REQ_RESULT(req, result_value)                                   \
-  req->result = (result_value);                                             \
-  if (req->result == -1) {                                                  \
-    req->sys_errno_ = _doserrno;                                            \
-    req->result = uv_translate_sys_error(req->sys_errno_);                  \
-  }
+  do {                                                                      \
+    req->result = (result_value);                                           \
+    if (req->result == -1) {                                                \
+      req->sys_errno_ = _doserrno;                                          \
+      req->result = uv_translate_sys_error(req->sys_errno_);                \
+    }                                                                       \
+  } while (0)
 
 #define SET_REQ_WIN32_ERROR(req, sys_errno)                                 \
-  req->sys_errno_ = (sys_errno);                                            \
-  req->result = uv_translate_sys_error(req->sys_errno_);                    \
+  do {                                                                      \
+    req->sys_errno_ = (sys_errno);                                          \
+    req->result = uv_translate_sys_error(req->sys_errno_);                  \
+  } while (0)
 
 #define SET_REQ_UV_ERROR(req, uv_errno, sys_errno)                          \
-  req->result = (uv_errno);                                                 \
-  req->sys_errno_ = (sys_errno);                                            \
+  do {                                                                      \
+    req->result = (uv_errno);                                               \
+    req->sys_errno_ = (sys_errno);                                          \
+  } while (0)
 
 #define VERIFY_FD(fd, req)                                                  \
   if (fd == -1) {                                                           \
@@ -75,15 +83,15 @@
    (*((uint64_t*) &(filetime)) - 116444736000000000ULL)
 
 #define FILETIME_TO_TIME_T(filetime)                                        \
-   (FILETIME_TO_UINT(filetime) / 10000000ULL);
+   (FILETIME_TO_UINT(filetime) / 10000000ULL)
 
 #define FILETIME_TO_TIME_NS(filetime, secs)                                 \
-   ((FILETIME_TO_UINT(filetime) - (secs * 10000000ULL)) * 100);
+   ((FILETIME_TO_UINT(filetime) - (secs * 10000000ULL)) * 100)
 
 #define FILETIME_TO_TIMESPEC(ts, filetime)                                  \
    do {                                                                     \
-     (ts).tv_sec = FILETIME_TO_TIME_T(filetime);                            \
-     (ts).tv_nsec = FILETIME_TO_TIME_NS(filetime, (ts).tv_sec);             \
+     (ts).tv_sec = (long) FILETIME_TO_TIME_T(filetime);                     \
+     (ts).tv_nsec = (long) FILETIME_TO_TIME_NS(filetime, (ts).tv_sec);      \
    } while(0)
 
 #define TIME_T_TO_FILETIME(time, filetime_ptr)                              \
@@ -229,19 +237,8 @@ INLINE static void uv_fs_req_init(uv_loop_t* loop, uv_fs_t* req,
 }
 
 
-static int is_path_dir(const WCHAR* path) {
-  DWORD attr = GetFileAttributesW(path);
-
-  if (attr != INVALID_FILE_ATTRIBUTES) {
-    return attr & FILE_ATTRIBUTE_DIRECTORY ? 1 : 0;
-  } else {
-    return 0;
-  }
-}
-
-
 INLINE static int fs__readlink_handle(HANDLE handle, char** target_ptr,
-    int64_t* target_len_ptr) {
+    uint64_t* target_len_ptr) {
   char buffer[MAXIMUM_REPARSE_DATA_BUFFER_SIZE];
   REPARSE_DATA_BUFFER* reparse_data = (REPARSE_DATA_BUFFER*) buffer;
   WCHAR *w_target;
@@ -393,7 +390,7 @@ void fs__open(uv_fs_t* req) {
   DWORD disposition;
   DWORD attributes = 0;
   HANDLE file;
-  int result, current_umask;
+  int fd, current_umask;
   int flags = req->file_flags;
 
   /* Obtain the active umask. umask() never fails and returns the previous */
@@ -414,8 +411,7 @@ void fs__open(uv_fs_t* req) {
     access = FILE_GENERIC_READ | FILE_GENERIC_WRITE;
     break;
   default:
-    result  = -1;
-    goto end;
+    goto einval;
   }
 
   if (flags & _O_APPEND) {
@@ -452,8 +448,7 @@ void fs__open(uv_fs_t* req) {
     disposition = CREATE_ALWAYS;
     break;
   default:
-    result = -1;
-    goto end;
+    goto einval;
   }
 
   attributes |= FILE_ATTRIBUTE_NORMAL;
@@ -482,8 +477,7 @@ void fs__open(uv_fs_t* req) {
     attributes |= FILE_FLAG_RANDOM_ACCESS;
     break;
   default:
-    result = -1;
-    goto end;
+    goto einval;
   }
 
   /* Setting this flag makes it possible to open a directory. */
@@ -508,9 +502,27 @@ void fs__open(uv_fs_t* req) {
     }
     return;
   }
-  result = _open_osfhandle((intptr_t) file, flags);
-end:
-  SET_REQ_RESULT(req, result);
+
+  fd = _open_osfhandle((intptr_t) file, flags);
+  if (fd < 0) {
+    /* The only known failure mode for _open_osfhandle() is EMFILE, in which
+     * case GetLastError() will return zero. However we'll try to handle other
+     * errors as well, should they ever occur.
+     */
+    if (errno == EMFILE)
+      SET_REQ_UV_ERROR(req, UV_EMFILE, ERROR_TOO_MANY_OPEN_FILES);
+    else if (GetLastError() != ERROR_SUCCESS)
+      SET_REQ_WIN32_ERROR(req, GetLastError());
+    else
+      SET_REQ_WIN32_ERROR(req, UV_UNKNOWN);
+    return;
+  }
+
+  SET_REQ_RESULT(req, fd);
+  return;
+
+ einval:
+  SET_REQ_UV_ERROR(req, UV_EINVAL, ERROR_INVALID_PARAMETER);
 }
 
 void fs__close(uv_fs_t* req) {
@@ -726,10 +738,10 @@ void fs__readdir(uv_fs_t* req) {
     uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");
   }
 
-#ifdef _MSC_VER
-  swprintf(path2, len + 3, fmt, pathw);
-#else
+#ifdef _CRT_NON_CONFORMING_SWPRINTFS
   swprintf(path2, fmt, pathw);
+#else
+  swprintf(path2, len + 3, fmt, pathw);
 #endif
   dir = FindFirstFileW(path2, &ent);
   free(path2);
@@ -809,56 +821,117 @@ void fs__readdir(uv_fs_t* req) {
 
 
 INLINE static int fs__stat_handle(HANDLE handle, uv_stat_t* statbuf) {
-  BY_HANDLE_FILE_INFORMATION info;
+  FILE_ALL_INFORMATION file_info;
+  FILE_FS_VOLUME_INFORMATION volume_info;
+  NTSTATUS nt_status;
+  IO_STATUS_BLOCK io_status;
 
-  if (!GetFileInformationByHandle(handle, &info)) {
+  nt_status = pNtQueryInformationFile(handle,
+                                      &io_status,
+                                      &file_info,
+                                      sizeof file_info,
+                                      FileAllInformation);
+
+  /* Buffer overflow (a warning status code) is expected here. */
+  if (NT_ERROR(nt_status)) {
+    SetLastError(pRtlNtStatusToDosError(nt_status));
     return -1;
   }
 
-  /* TODO: set st_dev, st_rdev and st_ino to something meaningful. */
-  statbuf->st_ino = 0;
-  statbuf->st_dev = 0;
-  statbuf->st_rdev = 0;
+  nt_status = pNtQueryVolumeInformationFile(handle,
+                                            &io_status,
+                                            &volume_info,
+                                            sizeof volume_info,
+                                            FileFsVolumeInformation);
 
-  statbuf->st_gid = 0;
-  statbuf->st_uid = 0;
+  /* Buffer overflow (a warning status code) is expected here. */
+  if (NT_ERROR(nt_status)) {
+    SetLastError(pRtlNtStatusToDosError(nt_status));
+    return -1;
+  }
 
+  /* Todo: st_mode should probably always be 0666 for everyone. We might also
+   * want to report 0777 if the file is a .exe or a directory.
+   *
+   * Currently it's based on whether the 'readonly' attribute is set, which
+   * makes little sense because the semantics are so different: the 'read-only'
+   * flag is just a way for a user to protect against accidental deleteion, and
+   * serves no security purpose. Windows uses ACLs for that.
+   *
+   * Also people now use uv_fs_chmod() to take away the writable bit for good
+   * reasons. Windows however just makes the file read-only, which makes it
+   * impossible to delete the file afterwards, since read-only files can't be
+   * deleted.
+   *
+   * IOW it's all just a clusterfuck and we should think of something that
+   * makes slighty more sense.
+   *
+   * And uv_fs_chmod should probably just fail on windows or be a total no-op.
+   * There's nothing sensible it can do anyway.
+   */
   statbuf->st_mode = 0;
 
-  statbuf->st_blksize = 0;
-  statbuf->st_blocks = 0;
-
-  statbuf->st_flags = 0;
-  statbuf->st_gen = 0;
-
-  if (info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
-    if (fs__readlink_handle(handle, NULL, &statbuf->st_size) != 0) {
-      return -1;
-    }
+  if (file_info.BasicInformation.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) {
     statbuf->st_mode |= S_IFLNK;
-  } else if (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+    if (fs__readlink_handle(handle, NULL, &statbuf->st_size) != 0)
+      return -1;
+
+  } else if (file_info.BasicInformation.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
     statbuf->st_mode |= _S_IFDIR;
     statbuf->st_size = 0;
+
   } else {
     statbuf->st_mode |= _S_IFREG;
-    statbuf->st_size = ((int64_t) info.nFileSizeHigh << 32) +
-                        (int64_t) info.nFileSizeLow;
+    statbuf->st_size = file_info.StandardInformation.EndOfFile.QuadPart;
   }
 
-  if (info.dwFileAttributes & FILE_ATTRIBUTE_READONLY) {
-    statbuf->st_mode |= (_S_IREAD + (_S_IREAD >> 3) + (_S_IREAD >> 6));
-  } else {
-    statbuf->st_mode |= ((_S_IREAD|_S_IWRITE) + ((_S_IREAD|_S_IWRITE) >> 3) +
-      ((_S_IREAD|_S_IWRITE) >> 6));
-  }
+  if (file_info.BasicInformation.FileAttributes & FILE_ATTRIBUTE_READONLY)
+    statbuf->st_mode |= _S_IREAD | (_S_IREAD >> 3) | (_S_IREAD >> 6);
+  else
+    statbuf->st_mode |= (_S_IREAD | _S_IWRITE) | ((_S_IREAD | _S_IWRITE) >> 3) |
+                        ((_S_IREAD | _S_IWRITE) >> 6);
 
-  FILETIME_TO_TIMESPEC(statbuf->st_mtim, info.ftLastWriteTime);
-  FILETIME_TO_TIMESPEC(statbuf->st_atim, info.ftLastAccessTime);
-  FILETIME_TO_TIMESPEC(statbuf->st_ctim, info.ftCreationTime);
-  FILETIME_TO_TIMESPEC(statbuf->st_birthtim, info.ftCreationTime);
+  FILETIME_TO_TIMESPEC(statbuf->st_atim, file_info.BasicInformation.LastAccessTime);
+  FILETIME_TO_TIMESPEC(statbuf->st_ctim, file_info.BasicInformation.ChangeTime);
+  FILETIME_TO_TIMESPEC(statbuf->st_mtim, file_info.BasicInformation.LastWriteTime);
+  FILETIME_TO_TIMESPEC(statbuf->st_birthtim, file_info.BasicInformation.CreationTime);
 
-  statbuf->st_nlink = (info.nNumberOfLinks <= SHRT_MAX) ?
-                      (short) info.nNumberOfLinks : SHRT_MAX;
+  statbuf->st_ino = file_info.InternalInformation.IndexNumber.QuadPart;
+
+  /* st_blocks contains the on-disk allocation size in 512-byte units. */
+  statbuf->st_blocks =
+      file_info.StandardInformation.AllocationSize.QuadPart >> 9ULL;
+
+  statbuf->st_nlink = file_info.StandardInformation.NumberOfLinks;
+
+  statbuf->st_dev = volume_info.VolumeSerialNumber;
+
+  /* The st_blksize is supposed to be the 'optimal' number of bytes for reading
+   * and writing to the disk. That is, for any definition of 'optimal' - it's
+   * supposed to at least avoid read-update-write behavior when writing to the
+   * disk.
+   *
+   * However nobody knows this and even fewer people actually use this value,
+   * and in order to fill it out we'd have to make another syscall to query the
+   * volume for FILE_FS_SECTOR_SIZE_INFORMATION.
+   *
+   * Therefore we'll just report a sensible value that's quite commonly okay
+   * on modern hardware.
+   */
+  statbuf->st_blksize = 2048;
+
+  /* Todo: set st_flags to something meaningful. Also provide a wrapper for
+   * chattr(2).
+   */
+  statbuf->st_flags = 0;
+
+  /* Windows has nothing sensible to say about these values, so they'll just
+   * remain empty.
+   */
+  statbuf->st_gid = 0;
+  statbuf->st_uid = 0;
+  statbuf->st_rdev = 0;
+  statbuf->st_gen = 0;
 
   return 0;
 }
@@ -1069,7 +1142,6 @@ static void fs__chmod(uv_fs_t* req) {
 
 static void fs__fchmod(uv_fs_t* req) {
   int fd = req->fd;
-  int result;
   HANDLE handle;
   NTSTATUS nt_status;
   IO_STATUS_BLOCK io_status;
@@ -1077,7 +1149,7 @@ static void fs__fchmod(uv_fs_t* req) {
 
   VERIFY_FD(fd, req);
 
-  handle = (HANDLE)_get_osfhandle(fd);
+  handle = (HANDLE) _get_osfhandle(fd);
 
   nt_status = pNtQueryInformationFile(handle,
                                       &io_status,
@@ -1085,9 +1157,9 @@ static void fs__fchmod(uv_fs_t* req) {
                                       sizeof file_info,
                                       FileBasicInformation);
 
-  if (nt_status != STATUS_SUCCESS) {
-    result = -1;
-    goto done;
+  if (!NT_SUCCESS(nt_status)) {
+    SET_REQ_WIN32_ERROR(req, pRtlNtStatusToDosError(nt_status));
+    return;
   }
 
   if (req->mode & _S_IWRITE) {
@@ -1102,15 +1174,12 @@ static void fs__fchmod(uv_fs_t* req) {
                                     sizeof file_info,
                                     FileBasicInformation);
 
-  if (nt_status != STATUS_SUCCESS) {
-    result = -1;
-    goto done;
+  if (!NT_SUCCESS(nt_status)) {
+    SET_REQ_WIN32_ERROR(req, pRtlNtStatusToDosError(nt_status));
+    return;
   }
 
-  result = 0;
-
-done:
-  SET_REQ_RESULT(req, result);
+  SET_REQ_SUCCESS(req);
 }
 
 
@@ -1615,7 +1684,7 @@ int uv_fs_readdir(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
     return uv_translate_sys_error(err);
   }
 
-  req->file_flags;
+  req->file_flags = flags;
 
   if (cb) {
     QUEUE_FS_TP_JOB(loop, req);

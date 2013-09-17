@@ -104,12 +104,16 @@ static int uv__create_stdio_pipe_pair(uv_loop_t* loop,
   int err;
 
   if (flags & UV_READABLE_PIPE) {
-    server_access |= PIPE_ACCESS_OUTBOUND;
+    /* The server needs inbound access too, otherwise CreateNamedPipe() */
+    /* won't give us the FILE_READ_ATTRIBUTES permission. We need that to */
+    /* probe the state of the write buffer when we're trying to shutdown */
+    /* the pipe. */
+    server_access |= PIPE_ACCESS_OUTBOUND | PIPE_ACCESS_INBOUND;
     client_access |= GENERIC_READ | FILE_WRITE_ATTRIBUTES;
   }
   if (flags & UV_WRITABLE_PIPE) {
     server_access |= PIPE_ACCESS_INBOUND;
-    client_access |= GENERIC_WRITE;
+    client_access |= GENERIC_WRITE | FILE_READ_ATTRIBUTES;
   }
 
   /* Create server pipe handle. */
@@ -163,8 +167,11 @@ static int uv__create_stdio_pipe_pair(uv_loop_t* loop,
     }
   }
 
-  /* The server end is now readable and writable. */
-  server_pipe->flags |= UV_HANDLE_READABLE | UV_HANDLE_WRITABLE;
+  /* The server end is now readable and/or writable. */
+  if (flags & UV_READABLE_PIPE)
+    server_pipe->flags |= UV_HANDLE_WRITABLE;
+  if (flags & UV_WRITABLE_PIPE)
+    server_pipe->flags |= UV_HANDLE_READABLE;
 
   *child_pipe_ptr = child_pipe;
   return 0;
@@ -188,7 +195,7 @@ static int uv__duplicate_handle(uv_loop_t* loop, HANDLE handle, HANDLE* dup) {
 
   /* _get_osfhandle will sometimes return -2 in case of an error. This seems */
   /* to happen when fd <= 2 and the process' corresponding stdio handle is */
-  /* set to NULL. Unfortunately DuplicateHandle will happily duplicate /*
+  /* set to NULL. Unfortunately DuplicateHandle will happily duplicate */
   /* (HANDLE) -2, so this situation goes unnoticed until someone tries to */
   /* use the duplicate. Therefore we filter out known-invalid handles here. */
   if (handle == INVALID_HANDLE_VALUE ||
@@ -253,8 +260,9 @@ int uv__create_nul_handle(HANDLE* handle_ptr,
 }
 
 
-int uv__stdio_create(uv_loop_t* loop, uv_process_options_t* options,
-    BYTE** buffer_ptr) {
+int uv__stdio_create(uv_loop_t* loop,
+                     const uv_process_options_t* options,
+                     BYTE** buffer_ptr) {
   BYTE* buffer;
   int count, i;
   int err;
