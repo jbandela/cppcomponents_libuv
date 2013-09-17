@@ -218,7 +218,6 @@ TEST_CASE("TCP", "TcpStream"){
 
 	auto loop = luv::Loop{};
 
-	cppcomponents::LoopExecutor executor;
 
 	luv::TcpStream server{ loop };
 
@@ -226,12 +225,8 @@ TEST_CASE("TCP", "TcpStream"){
 
 	server.Bind(server_addr);
 
-	auto prep = luv::Prepare{ loop }.QueryInterface<luv::IPrepare>();
-	prep.Start([&](use<luv::IPrepare> p, int status){
-		executor.RunQueuedClosures();
-	});
 
-	prep.Unref();
+	luv::Executor executor{ loop };
 
 		server.Listen(1,cppcomponents::resumable<void>([&](use<luv::IStream> stream, int,cppcomponents::awaiter<void> await){
 
@@ -275,6 +270,7 @@ TEST_CASE("TCP", "TcpStream"){
 
 
 			server.Close();
+			executor.Stop();
 
 
 		});
@@ -282,8 +278,6 @@ TEST_CASE("TCP", "TcpStream"){
 		client_func();
 	loop.Run();
 
-	prep = nullptr;
-	loop.Run();
 
 	
 

@@ -1647,6 +1647,29 @@ namespace cppcomponents_libuv{
 	// Thead functions not implemented, use std::thread
 
 
+	struct Executor : cppcomponents::LoopExecutor{
+		Prepare prep_;
+
+		explicit Executor(use<ILoop> loop) :prep_{ loop }{
+			cppcomponents::use<cppcomponents::ILoopExecutor> exec = *this;
+			prep_.Start([exec](cppcomponents::use<IPrepare>, int){
+				exec.RunQueuedClosures();
+			});
+		}
+
+		Executor(const Executor&) = delete;
+		Executor& operator=(const Executor&) = delete;
+
+		~Executor(){
+			prep_.Stop();
+		}
+
+		void Stop(){
+			prep_.Unref();
+		}
+
+	};
+
 }
 
 #endif
