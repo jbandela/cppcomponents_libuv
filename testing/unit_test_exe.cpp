@@ -8,7 +8,7 @@ namespace{
 	struct MemLeakCheckInit{
 		MemLeakCheckInit(){
 			_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-			//_crtBreakAlloc = 1284;
+			_crtBreakAlloc = 3562;
 		}
 	};
 
@@ -216,15 +216,22 @@ TEST_CASE("test-connection-fail", "test-connection-fail"){
 
 TEST_CASE("TCP", "TcpStream"){
 
-	auto loop = luv::Loop::DefaultLoop();
+	auto loop = luv::Loop{};
 
+	cppcomponents::LoopExecutor executor;
 
+	luv::TcpStream server{ loop };
 
-		luv::TcpStream server{ loop };
+	auto server_addr = luv::Uv::Ip4Addr("0.0.0.0", TEST_PORT);
 
-		auto server_addr = luv::Uv::Ip4Addr("0.0.0.0", TEST_PORT);
+	server.Bind(server_addr);
 
-		server.Bind(server_addr);
+	auto prep = luv::Prepare{ loop }.QueryInterface<luv::IPrepare>();
+	prep.Start([&](use<luv::IPrepare> p, int status){
+		executor.RunQueuedClosures();
+	});
+
+	prep.Unref();
 
 		server.Listen(1,cppcomponents::resumable<void>([&](use<luv::IStream> stream, int,cppcomponents::awaiter<void> await){
 
@@ -235,7 +242,7 @@ TEST_CASE("TCP", "TcpStream"){
 
 			int k = 0;
 			while (true){
-				auto fut = await.as_future(readchan.Read());
+				auto fut = await.as_future(executor,readchan.Read());
 				if (fut.ErrorCode()){
 					break;
 				}
@@ -245,7 +252,7 @@ TEST_CASE("TCP", "TcpStream"){
 				std::stringstream strstream;
 				strstream << "Hi " << k++;
 				std::string response = strstream.str();
-				await(client.Write(response));
+				await(executor,client.Write(response));
 			}
 		}));
 
@@ -254,14 +261,14 @@ TEST_CASE("TCP", "TcpStream"){
 			for (int i = 0; i < 4; i++){
 				auto client_address = luv::Uv::Ip4Addr("127.0.0.1", TEST_PORT);
 				luv::TcpStream client{ loop };
-				await(client.Connect(client_address));
+				await(executor,client.Connect(client_address));
 				auto chan = client.ReadStartWithChannel();
-				await(client.Write(std::string("Hello")));
-				auto buf = await(chan.Read());
+				await(executor,client.Write(std::string("Hello")));
+				auto buf = await(executor,chan.Read());
 				std::string response{ buf.Begin(), buf.End() };
 				REQUIRE(std::string("Hi 0") == response);
 				await(client.Write(std::string("Hello")));
-				buf = await(chan.Read());
+				buf = await(executor,chan.Read());
 				response.assign( buf.Begin(), buf.End() );
 				REQUIRE(std::string("Hi 1") == response);
 			}
@@ -273,6 +280,9 @@ TEST_CASE("TCP", "TcpStream"){
 		});
 
 		client_func();
+	loop.Run();
+
+	prep = nullptr;
 	loop.Run();
 
 	

@@ -1007,8 +1007,10 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<ImpPoll,uv_poll_t>, implement_runtime_
 struct ImpPrepare : uv_prepare_t, ImpHandleBase<ImpPrepare,uv_prepare_t>, implement_runtime_class<ImpPrepare, Prepare_t>
 {
 	typedef ImpHandleBase<ImpPrepare,uv_prepare_t> imp_base_t;
-	using imp_base_t::ReleaseImplementationDestroy;
 
+	void ReleaseImplementationDestroy(){
+		imp_base_t::ReleaseImplementationDestroy();
+	}
 
 	use<PrepareCallback> cb_;
 
