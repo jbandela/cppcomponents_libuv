@@ -305,11 +305,11 @@ struct ImpFsRequest
 		return uv_t_.path;
 	}
 
-	Stat GetStatBuf(){
-		static_assert(sizeof(Stat) == sizeof(uv_stat_t),
+	Stat_t GetStatBuf(){
+		static_assert(sizeof(Stat_t) == sizeof(uv_stat_t),
 			"Stat does not correlate with uv_stat_t");
-		Stat ret;
-		memcpy(&ret, &uv_t_.statbuf, sizeof(Stat));
+		Stat_t ret;
+		memcpy(&ret, &uv_t_.statbuf, sizeof(Stat_t));
 		return ret;
 	}
 
@@ -1884,9 +1884,9 @@ struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<ImpFsPoll,uv_fs_poll_t>, implemen
 	static void PollCallbackRaw(uv_fs_poll_t* handle,int status,
 		const uv_stat_t* prev, const uv_stat_t* curr){
 		auto& imp = *static_cast<ImpFsPoll*>(handle);
-		static_assert(sizeof(cppcomponents_libuv::Stat)==sizeof(uv_stat_t),"Mismatch Stat, uv_stat_t");
-		SWALLOW_EXCEPTIONS( imp.cb_(imp.QueryInterface<IFsPoll>(), status, reinterpret_cast<const Stat*>(prev),
-			reinterpret_cast<const Stat*>(curr)));
+		static_assert(sizeof(cppcomponents_libuv::Stat_t) == sizeof(uv_stat_t), "Mismatch Stat, uv_stat_t");
+		SWALLOW_EXCEPTIONS(imp.cb_(imp.QueryInterface<IFsPoll>(), status, reinterpret_cast<const Stat_t*>(prev),
+			reinterpret_cast<const Stat_t*>(curr)));
 	}
 	void StartRaw(use<FsPollCallback> cb, cr_string path, unsigned int msinterval){
 		cb_ = cb;

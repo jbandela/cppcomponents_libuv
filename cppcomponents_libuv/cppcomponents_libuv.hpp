@@ -79,7 +79,7 @@ namespace cppcomponents_libuv{
 	} TimeSpec;
 
 
-	typedef struct {
+	 struct Stat_t {
 		uint64_t st_dev;
 		uint64_t st_mode;
 		uint64_t st_nlink;
@@ -96,7 +96,7 @@ namespace cppcomponents_libuv{
 		TimeSpec st_mtim;
 		TimeSpec st_ctim;
 		TimeSpec st_birthtim;
-	} Stat;
+	 };
 
 
 	class SockAddrRef{
@@ -228,14 +228,14 @@ namespace cppcomponents_libuv{
 	 struct cross_conversion<const cppcomponents_libuv::TimeSpec*>
 		 :public trivial_conversion<const cppcomponents_libuv::TimeSpec*>{};
 	 template<>
-	 struct cross_conversion<cppcomponents_libuv::Stat>
-		 :public trivial_conversion<cppcomponents_libuv::Stat>{};
+	 struct cross_conversion<cppcomponents_libuv::Stat_t>
+		 :public trivial_conversion<cppcomponents_libuv::Stat_t>{};
 	 template<>
-	 struct cross_conversion<cppcomponents_libuv::Stat*>
-		 :public trivial_conversion<cppcomponents_libuv::Stat*>{};
+	 struct cross_conversion<cppcomponents_libuv::Stat_t*>
+		 :public trivial_conversion<cppcomponents_libuv::Stat_t*>{};
 	 template<>
-	 struct cross_conversion<const cppcomponents_libuv::Stat*>
-		 :public trivial_conversion<const cppcomponents_libuv::Stat*>{};
+	 struct cross_conversion<const cppcomponents_libuv::Stat_t*>
+		 :public trivial_conversion<const cppcomponents_libuv::Stat_t*>{};
 
 	 template<>
 	 struct cross_conversion<cppcomponents_libuv::SockAddrRef>
@@ -292,7 +292,7 @@ namespace cppcomponents_libuv{
 	 };
 
 	 template<>
-	 struct uuid_of<cppcomponents_libuv::Stat>
+	 struct uuid_of<cppcomponents_libuv::Stat_t>
 	 {
 		 typedef cppcomponents::uuid<0xb1fa1121, 0xf2ce, 0x4c03, 0x85a8, 0xbd414711ed00> uuid_type;
 
@@ -1570,7 +1570,7 @@ namespace cppcomponents_libuv{
 		std::intptr_t GetResult();
 		void* GetPtr();
 		cppcomponents::cr_string GetPath();
-		Stat GetStatBuf();
+		Stat_t GetStatBuf();
 
 
 		CPPCOMPONENTS_CONSTRUCT(IFsRequest, Cleanup, GetLoop, GetResult, GetPtr, GetPath, GetStatBuf);
@@ -1877,8 +1877,8 @@ namespace cppcomponents_libuv{
 			return p.QueryInterface < cppcomponents::IFuture < std::vector < std::string >>> ();
 
 		}
-		cppcomponents::Future<Stat> Stat(cr_string path){
-			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat>();
+		cppcomponents::Future<Stat_t> Stat(cr_string path){
+			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
 
 			auto f = [p](cppcomponents::use<IFsRequest> r){
 				Cleaner c{ r };
@@ -1894,11 +1894,11 @@ namespace cppcomponents_libuv{
 
 			Fs::StatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
 
-			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat>>();
+			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
 
 		}
-		cppcomponents::Future<cppcomponents_libuv::Stat> Stat(){
-			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat>();
+		cppcomponents::Future<cppcomponents_libuv::Stat_t> Stat(){
+			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
 
 			auto f = [p](cppcomponents::use<IFsRequest> r){
 				Cleaner c{ r };
@@ -1914,7 +1914,7 @@ namespace cppcomponents_libuv{
 
 			Fs::FstatRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
 
-			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat>>();
+			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
 		}
 		cppcomponents::Future<std::intptr_t> Rename(cr_string path, cr_string new_path){
 			auto p = cppcomponents::make_promise<std::intptr_t>();
@@ -2099,8 +2099,8 @@ namespace cppcomponents_libuv{
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
 		}
-		cppcomponents::Future<cppcomponents_libuv::Stat> Lstat(cr_string path){
-			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat>();
+		cppcomponents::Future<cppcomponents_libuv::Stat_t> Lstat(cr_string path){
+			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
 
 			auto f = [p](cppcomponents::use<IFsRequest> r){
 				Cleaner c{ r };
@@ -2116,7 +2116,7 @@ namespace cppcomponents_libuv{
 
 			Fs::LstatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
 
-			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat>>();
+			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
 
 		}
 
@@ -2257,7 +2257,7 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid < 0xff330521, 0x0c3e, 0x4c7b, 0x85fd, 0x7cfef3e71cb4 >>
 	{
 		typedef cppcomponents::delegate < void(use<IFsPoll>,
-			int status, const Stat* prev, const Stat* curr),
+			int status, const Stat_t* prev, const Stat_t* curr),
 			cppcomponents::uuid<0xb64e98a1, 0xc2a9, 0x4e5f, 0x9bd9, 0x93d0b2913f97>
 		> FsPollCallback;
 
