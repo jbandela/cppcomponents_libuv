@@ -300,7 +300,7 @@ TEST_CASE("fs", "fs1"){
 		std::string filename = "./testdir/testfile.txt";
 
 		// Create a directory
-		REQUIRE(0 == await(file.Mkdir(dir, O_CREAT)));
+		REQUIRE(0 == await.as_future(file.Mkdir("./testdir", S_IWRITE|S_IREAD|S_IFDIR|S_IEXEC)).ErrorCode());
 
 		// Create a file in the directory
 		REQUIRE(0 == await.as_future(file.Open(filename, O_CREAT | O_RDWR, S_IWRITE|S_IREAD)).ErrorCode());
