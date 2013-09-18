@@ -1657,11 +1657,11 @@ namespace cppcomponents_libuv{
 
 	class LoopFile{
 		struct Cleaner{
-			cppcomponents::use<IFsRequest>& r_;
-			Cleaner(cppcomponents::use<IFsRequest>& r) :r_{ r }{}
+			cppcomponents::use<IFsRequest>* r_;
+			Cleaner(cppcomponents::use<IFsRequest>& r) :r_{ &r } {}
 
 			~Cleaner(){
-				r_.Cleanup();
+				r_->Cleanup();
 			}
 		};
 
