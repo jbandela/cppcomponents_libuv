@@ -82,6 +82,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\cppcomponents_libuv\cppcomponents_libuv_dll.cpp" />
+    <ClCompile Include="..\..\..\testing\unit_test_exe.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\dependencies\libuv\libuv.vcxproj">

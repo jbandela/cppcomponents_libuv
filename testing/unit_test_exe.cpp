@@ -300,22 +300,22 @@ TEST_CASE("fs", "fs1"){
 		std::string filename = "./testdir/testfile.txt";
 
 		// Create a directory
-		await(file.Mkdir(dir, O_CREAT));
+		REQUIRE(0 == await(file.Mkdir(dir, O_CREAT)));
 
 		// Create a file in the directory
-		await(file.Open(filename, O_CREAT | O_RDWR, S_IWRITE|S_IREAD));
+		REQUIRE(0 == await.as_future(file.Open(filename, O_CREAT | O_RDWR, S_IWRITE|S_IREAD)).ErrorCode());
 
 
 		// Write some data
 		std::string out = "Hello World";
-		await(file.Write(out.data(), out.size(), 0));
+		REQUIRE(0 == await.as_future(file.Write(out.data(), out.size(), 0)).ErrorCode());
 
 		// Sync and close
-		await(file.Sync());
-		await(file.Close());
+		REQUIRE(0 == await.as_future(file.Sync()).ErrorCode());
+		REQUIRE(0 == await.as_future(file.Close()).ErrorCode());
 
 		// Open it again
-		await(file.Open(filename, O_RDONLY, 0));
+		REQUIRE(0 == await.as_future(file.Open(filename, O_RDONLY, 0)).ErrorCode());
 		std::vector<char> buf(100);
 
 		// Read from it
@@ -323,24 +323,24 @@ TEST_CASE("fs", "fs1"){
 		std::string in{ buf.begin(), buf.begin() + sz };
 		REQUIRE(out == in);
 
-		await(file.Close());
+		REQUIRE(0 == await.as_future(file.Close()).ErrorCode());
 
-		await(file.Open(filename, O_WRONLY, 0));
+		REQUIRE(0 == await.as_future(file.Open(filename, O_WRONLY, 0)).ErrorCode());
 
 		// Truncate it
-		await(file.Truncate(5));
+		REQUIRE(0 == await.as_future(file.Truncate(5)).ErrorCode());
 
 		// Close it
-		await(file.Close());
+		REQUIRE(0 == await.as_future(file.Close()).ErrorCode());
 
 		// Open it again
-		await(file.Open(filename, O_RDONLY, 0));
+		REQUIRE(0 == await.as_future(file.Open(filename, O_RDONLY, 0)).ErrorCode());
 
 		// Check out truncated read
 		sz = await(file.Read(&buf[0], buf.size(), 0));
 		in.assign(buf.begin(), buf.begin() + sz);
 		REQUIRE(in == "Hello");
-		await(file.Close());
+		REQUIRE(0 == await.as_future(file.Close()).ErrorCode());
 
 		// Stat it
 		auto stat = await(file.Stat(filename));
@@ -352,7 +352,7 @@ TEST_CASE("fs", "fs1"){
 		REQUIRE(dirfiles[0] == "testfile.txt");
 
 		// Delete the file
-		await(file.Unlink(filename));
+		REQUIRE(0 == await.as_future(file.Unlink(filename)).ErrorCode());
 
 		// Check that it is not in the directory
 		dirfiles = await(file.Readdir(dir, 0));
@@ -364,7 +364,7 @@ TEST_CASE("fs", "fs1"){
 		REQUIRE(iter != dirfiles.end());
 
 		// Delete the directory
-		file.Rmdir(dir);
+		REQUIRE(0 == await.as_future(file.Rmdir(dir)).ErrorCode());
 
 		// Check that it is no longer present
 		dirfiles = await(file.Readdir("./",0));
