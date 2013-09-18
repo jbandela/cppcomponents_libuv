@@ -1668,7 +1668,7 @@ namespace cppcomponents_libuv{
 		FileOsType file_;
 		cppcomponents::use<ILoop> loop_;
 
-
+	public:
 
 		FileOsType GetFile(){ return file_; }
 		explicit operator bool(){ return file_ >= 0; }
