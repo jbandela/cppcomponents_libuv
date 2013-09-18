@@ -99,6 +99,76 @@ namespace cppcomponents_libuv{
 	} Stat;
 
 
+	class SockAddrRef{
+		const sockaddr* addr_;
+
+	public:
+		const sockaddr* GetAddr(){ return addr_; }
+		SockAddrRef(const sockaddr_in& in)
+			:addr_{ reinterpret_cast<const sockaddr*>(&in) }
+		{}
+		SockAddrRef(const sockaddr_in6& in)
+			:addr_{ reinterpret_cast<const sockaddr*>(&in) }
+		{}
+		SockAddrRef(const sockaddr& in)
+			:addr_{ &in }
+		{	}
+		SockAddrRef(const sockaddr* in) :addr_{ in }
+		{	}
+	};
+
+
+	class SockAddr{
+		union{
+			sockaddr s_;
+			sockaddr_in sin_;
+			sockaddr_in6 sin6_;
+		};
+
+		void set(const sockaddr* s){
+			if (s->sa_family == AF_INET){
+				sin_ = *reinterpret_cast<const sockaddr_in*>(s);
+			}
+			else if (s->sa_family == AF_INET6){
+				sin6_ = *reinterpret_cast<const sockaddr_in6*>(s);
+			}
+			else{
+				throw cppcomponents::error_invalid_arg{};
+			}
+		}
+
+	public:
+		SockAddr(const sockaddr* s){
+			set(s);
+		}
+
+		SockAddr(const sockaddr& s){
+			set(&s);
+		}
+
+		SockAddr(const sockaddr_in& s){
+			sin_ = s;
+		}
+
+		SockAddr(const sockaddr_in6& s){
+			sin6_ = s;
+		}
+
+		const sockaddr* GetAddr(){ return &s_; }
+		const sockaddr_in& GetAddr4(){
+			if (s_.sa_family != AF_INET)
+				throw cppcomponents::error_invalid_arg{};
+			return sin_;
+		}
+		const sockaddr_in6& GetAddr6(){
+			if (s_.sa_family != AF_INET6)
+				throw cppcomponents::error_invalid_arg{};
+			return sin6_;
+		}
+
+
+	};
+
 }
 
  namespace cross_compiler_interface{
@@ -167,7 +237,15 @@ namespace cppcomponents_libuv{
 	 struct cross_conversion<const cppcomponents_libuv::Stat*>
 		 :public trivial_conversion<const cppcomponents_libuv::Stat*>{};
 
+	 template<>
+	 struct cross_conversion<cppcomponents_libuv::SockAddrRef>
+		 :public trivial_conversion<cppcomponents_libuv::SockAddrRef>
+	 {};
 
+	 template<>
+	 struct cross_conversion<cppcomponents_libuv::SockAddr>
+		 :public trivial_conversion<cppcomponents_libuv::SockAddr>
+	 {};
  }
 
 #include "implementation/errors.hpp"
@@ -217,6 +295,18 @@ namespace cppcomponents_libuv{
 	 struct uuid_of<cppcomponents_libuv::Stat>
 	 {
 		 typedef cppcomponents::uuid<0xb1fa1121, 0xf2ce, 0x4c03, 0x85a8, 0xbd414711ed00> uuid_type;
+
+	 };
+	 template<>
+	 struct uuid_of<cppcomponents_libuv::SockAddr>
+	 {
+		 typedef cppcomponents::uuid<0x2d6ae048, 0xa48c, 0x42fc, 0xae73, 0xde083196c21f> uuid_type;
+
+	 };
+	 template<>
+	 struct uuid_of<cppcomponents_libuv::SockAddrRef>
+	 {
+		 typedef cppcomponents::uuid<0x8dcd2bdc, 0x1c72, 0x4cf2, 0xa4cc, 0xaeee6317a567> uuid_type;
 
 	 };
 
@@ -310,7 +400,7 @@ namespace cppcomponents_libuv{
 	typedef IHandle::CloseCallback CloseCallback;
 
 	// Callbacks
-	typedef cppcomponents::delegate < Buffer(use<IHandle> handle, std::ptrdiff_t suggested_size),
+	typedef cppcomponents::delegate < Buffer(use<IHandle> handle, std::size_t suggested_size),
 		cppcomponents::uuid<0x3298fd84, 0xe097, 0x4fc5, 0x9b28, 0x60e1f5e5d0c8	>
 	> AllocCallback;
 
@@ -643,11 +733,11 @@ namespace cppcomponents_libuv{
 			CPPCOMPONENTS_CONSTRUCT(IShutdownRequest, GetHandle);
 		};
 
-		typedef cppcomponents::delegate < void(use<IStream> stream, std::ptrdiff_t,  cppcomponents::use<cppcomponents::IBuffer>),
+		typedef cppcomponents::delegate < void(use<IStream> stream, std::intptr_t,  cppcomponents::use<cppcomponents::IBuffer>),
 			cppcomponents::uuid<0x38df861d, 0x421b, 0x43d1, 0xb081, 0x7d2ad030c44c		>
 		> ReadCallback;
 
-		typedef cppcomponents::delegate < void(use<IStream> pipe, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer>,
+		typedef cppcomponents::delegate < void(use<IStream> pipe, std::intptr_t nread, cppcomponents::use<cppcomponents::IBuffer>,
 			int pending),
 			cppcomponents::uuid<0xd4efdca8, 0xc398, 0x465a, 0x8812, 0x653250b6cdb4		>
 		> Read2Callback;
@@ -733,7 +823,7 @@ namespace cppcomponents_libuv{
 				auto chan = cppcomponents::make_channel < c_t>();
 
 
-				auto f = [chan](use<IStream> stream, std::ptrdiff_t nread, cppcomponents::use<cppcomponents::IBuffer> buf){
+				auto f = [chan](use<IStream> stream, std::intptr_t nread, cppcomponents::use<cppcomponents::IBuffer> buf){
 					if (nread >= 0){
 						chan.Write(buf);
 					}
@@ -827,6 +917,9 @@ namespace cppcomponents_libuv{
 	typedef IStream::IWriteRequest IWriteRequest;
 	typedef IStream::IShutdownRequest IShutdownRequest;
 
+
+
+
 	struct ITcpStream
 		: public cppcomponents::define_interface < cppcomponents::uuid <
 		0x7e57d378 , 0xa97c , 0x463d , 0xb153 , 0xd7c414ab4c59
@@ -849,18 +942,16 @@ namespace cppcomponents_libuv{
 		void NoDelay(bool enable);
 		void KeepAlive(bool enable, std::uint32_t delay);
 		void SimultaneousAccepts(bool enable);
-		void Bind(sockaddr_in);
-		void Bind6(sockaddr_in6);
+		void BindRaw(const sockaddr*);
 		void Getsockname(sockaddr* name, int* namelen);
 		void Getpeername(sockaddr* name, int* namelen);
-		use<IConnectRequest> ConnectRaw(sockaddr_in address, cppcomponents::use<ConnectCallback>);
-		use<IConnectRequest> Connect6Raw(sockaddr_in6 address, cppcomponents::use<ConnectCallback>);
+		use<IConnectRequest> ConnectRaw(const sockaddr* address, cppcomponents::use<ConnectCallback>);
 
 		CPPCOMPONENTS_CONSTRUCT(ITcpStream, Open,NoDelay,KeepAlive,SimultaneousAccepts,
-			Bind,Bind6,Getsockname,Getpeername,ConnectRaw,Connect6Raw);
+			BindRaw,Getsockname,Getpeername,ConnectRaw);
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(ITcpStream){
-			cppcomponents::Future<int> Connect(sockaddr_in address){
+			cppcomponents::Future<int> Connect(SockAddrRef address){
 				auto p = cppcomponents::make_promise<int>();
 				auto f = [p](use<IConnectRequest>, int result){
 					if (result < 0){
@@ -871,26 +962,16 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				this->get_interface().ConnectRaw(address, cppcomponents::make_delegate<ConnectCallback>(f));
+				this->get_interface().ConnectRaw(address.GetAddr(), cppcomponents::make_delegate<ConnectCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<int>>();
 	
 			}
-			cppcomponents::Future<int> Connect(sockaddr_in6 address){
-				auto p = cppcomponents::make_promise<int>();
-				auto f = [p](use<IConnectRequest>, int result){
-					if (result < 0){
-						p.SetError(result);
-					}
-					else{
-						p.Set(result);
-					}
-				};
 
-				this->get_interface().Connect6Raw(address, cppcomponents::make_delegate<ConnectCallback>(f));
 
-				return p.QueryInterface<cppcomponents::IFuture<int>>();
-	
+
+			void Bind(SockAddrRef addr){
+				this->get_interface().BindRaw(addr.GetAddr());
 			}
 
 		};
@@ -913,6 +994,7 @@ namespace cppcomponents_libuv{
 	typedef use_runtime_class<TcpStream_t> TcpStream;
 	
 
+
 	struct IUdpStream
 		: public cppcomponents::define_interface < cppcomponents::uuid <
 		0x2c4a1e5e , 0x4362 , 0x45db , 0xb8d6 , 0xac71c6810066
@@ -931,15 +1013,14 @@ namespace cppcomponents_libuv{
 			cppcomponents::uuid<0x5f2d1356, 0x7025, 0x4459, 0xb843, 0x9610a57f79be>
 		> UdpSendCallback;
 
-		typedef cppcomponents::delegate < void (use<IUdpStream>, std::ptrdiff_t nread,
-			Buffer buf, const sockaddr* addr, unsigned int flags),
+		typedef cppcomponents::delegate < void (use<IUdpStream>, std::intptr_t nread,
+			cppcomponents::use<cppcomponents::IBuffer>, SockAddr addr, unsigned int flags),
 			cppcomponents::uuid<0x62a0f712, 0x99f5, 0x4a09, 0x9d00, 0x2ec1b2dd6cea>
 		> UdpRecvCallback;
 
 
 		void Open(SocketOsType sock);
-		void Bind(sockaddr_in in, std::uint32_t flags);
-		void Bind6(sockaddr_in6 in, std::uint32_t flags);
+		void BindRaw(const sockaddr* in, std::uint32_t flags);
 		void GetSockname(sockaddr* name, int* namelen);
 		void SetMembership(cppcomponents::cr_string multicast_addr, cppcomponents::cr_string interface_addr,
 			std::uint32_t membership);
@@ -947,16 +1028,107 @@ namespace cppcomponents_libuv{
 		void SetMulticastTtl(std::int32_t ttl);
 		void SetBroadcast(bool on);
 		void SetTtl(std::int32_t ttl);
-		use<IUdpSendRequest> Send(Buffer* bufs, int buffcnt, sockaddr_in addr,
+		use<IUdpSendRequest> SendRaw(Buffer* bufs, int buffcnt, const sockaddr* addr,
 			cppcomponents::use<UdpSendCallback> send_cb);
-		use<IUdpSendRequest> Send6(Buffer* bufs, int buffcnt, sockaddr_in6 addr,
-			cppcomponents::use<UdpSendCallback> send_cb);
-
-		void RecvStart(cppcomponents::use<UdpRecvCallback>);
+		void RecvStartRaw(cppcomponents::use<UdpRecvCallback>);
 		void RecvStop();
 
-		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,Bind,Bind6,GetSockname,SetMembership,
-			SetMulticastLoop,SetMulticastTtl,SetBroadcast,SetTtl,Send,Send6,RecvStart,RecvStop);
+		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,BindRaw,GetSockname,SetMembership,
+			SetMulticastLoop,SetMulticastTtl,SetBroadcast,SetTtl,SendRaw,RecvStartRaw,RecvStop);
+
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IUdpStream){
+
+
+			void Bind(SockAddrRef addr, std::uint32_t flag){
+				this->get_interface().BindRaw(addr.GetAddr(),flag);
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(Buffer* bufs, int bufcnt, SockAddrRef addr){
+				auto p = cppcomponents::make_promise<int>();
+				auto func = [p](cppcomponents::use<IUdpSendRequest>, int status){
+					if (status < 0){
+						p.SetError(status);
+					}
+					else{
+						p.Set(status);
+					}
+				};
+				this->get_interface().SendRaw(bufs, bufcnt, addr.GetAddr(),cppcomponents::make_delegate<UdpSendCallback>(func));
+				return p.QueryInterface<cppcomponents::IFuture<int>>();
+			}
+
+			template<std::size_t N>
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(const char(&ar)[N], SockAddrRef addr){
+				Buffer b;
+				b.base = const_cast<char*>(&ar[0]);
+				b.len = N;
+
+				return Send(&b, 1,addr);
+			}
+
+
+
+			template<std::size_t N>
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(Buffer(&ar)[N], SockAddrRef addr){
+
+				return Send(&ar[0], N,addr);
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(const std::vector<Buffer>& bufs, SockAddrRef addr){
+
+				return Send(const_cast<char*>(&bufs.at(0)), bufs.size(),addr);
+			}
+
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(const char* data, std::size_t len, SockAddrRef addr){
+				Buffer b;
+				b.base = const_cast<char*>(data);
+				b.len = len;
+
+				return Send(&b, 1,addr);
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(const std::vector<char>& v, SockAddrRef addr){
+				return Send(&v.at(0), v.size(),addr);
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(const std::string& s, SockAddrRef addr){
+				return Send(&s.at(0), s.size(),addr);
+			}
+
+			cppcomponents::use<cppcomponents::IFuture<int>> Send(cppcomponents::cr_string s, SockAddrRef addr){
+				return Send(&s.at(0), s.size(),addr);
+			}
+
+
+
+			template<class F>
+			void RecvStart(F f){
+				this->get_interface().RecvStartRaw(cppcomponents::make_delegate<UdpRecvCallback>(f));
+			}
+			typedef std::tuple<cppcomponents::use<cppcomponents::IBuffer>,SockAddr,std::uint64_t> RecvChannel_t;
+
+			cppcomponents::Channel<RecvChannel_t> RecvStartWithChannel(){
+				auto chan = cppcomponents::make_channel < RecvChannel_t>();
+
+
+				auto f = [chan](use<IUdpStream>, std::intptr_t nread,
+					cppcomponents::use<cppcomponents::IBuffer> buf, SockAddr addr, unsigned int flags){
+					if (nread >= 0){
+						chan.Write(RecvChannel_t(buf, addr, flags));
+					}
+					else{
+						chan.WriteError(nread);
+					}
+				};
+
+
+				RecvStart(f);
+
+				return chan;
+			}
+		};
 	};
 
 	typedef IUdpStream::IUdpSendRequest IUdpSendRequest;
@@ -1012,10 +1184,30 @@ namespace cppcomponents_libuv{
 	{
 		void Open(FileOsType file);
 		void Bind(cppcomponents::cr_string name);
-		use<IConnectRequest> Connect(cppcomponents::cr_string name, cppcomponents::use<ConnectCallback> cb);
+		use<IConnectRequest> ConnectRaw(cppcomponents::cr_string name, cppcomponents::use<ConnectCallback> cb);
 		void PendingInstances(int count);
 
-		CPPCOMPONENTS_CONSTRUCT(IPipe, Open, Bind, Connect, PendingInstances);
+		CPPCOMPONENTS_CONSTRUCT(IPipe, Open, Bind, ConnectRaw, PendingInstances);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IPipe){
+
+			cppcomponents::Future<int> Connect(cppcomponents::cr_string name){
+				auto p = cppcomponents::make_promise<int>();
+				auto f = [p](use<IConnectRequest>, int result){
+					if (result < 0){
+						p.SetError(result);
+					}
+					else{
+						p.Set(result);
+					}
+				};
+
+				this->get_interface().ConnectRaw(name, cppcomponents::make_delegate<ConnectCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<int>>();
+
+			}
+		};
 
 	};
 
@@ -1044,10 +1236,17 @@ namespace cppcomponents_libuv{
 			cppcomponents::uuid<0x1679860e, 0x3e67, 0x4b1b, 0x8791, 0x18080f1df647>
 		> PollCallback;
 
-		void Start(int events, cppcomponents::use<PollCallback>);
+		void StartRaw(int events, cppcomponents::use<PollCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(IPoll, Start,Stop);
+		CPPCOMPONENTS_CONSTRUCT(IPoll, StartRaw,Stop);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IPoll){
+			template<class F>
+			void Start(F f){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<PollCallback>(f));
+				
+			}
+		};
 
 	};
 
@@ -1106,10 +1305,17 @@ namespace cppcomponents_libuv{
 			cppcomponents::uuid<0x5817e0e6, 0x31c8, 0x40ab, 0xbce5, 0x6913db56a285>
 		> CheckCallback;
 
-		void Start(cppcomponents::use<CheckCallback>);
+		void StartRaw(cppcomponents::use<CheckCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(ICheck, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(ICheck, StartRaw, Stop);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ICheck){
+			template<class F>
+			void Start(F f){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<CheckCallback>(f));
+			}
+		};
 	};
 
 	typedef ICheck::CheckCallback CheckCallback;
@@ -1128,10 +1334,17 @@ namespace cppcomponents_libuv{
 			cppcomponents::uuid<0x05727499, 0xcc1d, 0x4170, 0xa88c, 0xe31f8d014778>
 		> IdleCallback;
 
-		void Start(cppcomponents::use<IdleCallback>);
+		void StartRaw(cppcomponents::use<IdleCallback>);
 		void Stop();
 
-		CPPCOMPONENTS_CONSTRUCT(IIdle, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(IIdle, StartRaw, Stop);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IIdle){
+			template<class F>
+			void Start(F f){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<IdleCallback>(f));
+			}
+		};
 	};	
 
 	typedef IIdle::IdleCallback IdleCallback;
@@ -1202,6 +1415,26 @@ namespace cppcomponents_libuv{
 			template<class F>
 			void Start(F f, std::uint64_t timeout, std::uint64_t repeat){
 				this->get_interface().StartRaw(cppcomponents::make_delegate<TimerCallback>(f), timeout, repeat);
+			}
+
+			cppcomponents::Channel<int> StartAsChannel(){
+				auto chan = cppcomponents::make_channel<int>();
+
+				auto f = [chan](cppcomponents::use<ITimer>, int status){
+
+					if (status < 0){
+						chan.WriteError(status);
+					}
+					else{
+						chan.Write(status);
+					}
+
+				};
+
+				Start(f);
+
+				return chan;
+
 			}
 		};
 
@@ -1334,7 +1567,7 @@ namespace cppcomponents_libuv{
 	{
 		void Cleanup();
 		cppcomponents::use<ILoop> GetLoop();
-		std::ptrdiff_t GetResult();
+		std::intptr_t GetResult();
 		void* GetPtr();
 		cppcomponents::cr_string GetPath();
 		Stat GetStatBuf();
@@ -1356,61 +1589,64 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid<0x96340307, 0x442f, 0x4327, 0x8fd0, 0xcbb71d95bf8a>
 		>
 	{
-		use<IFsRequest> Close(use<ILoop>, FileOsType, use<FsCallback>);
+		use<IFsRequest> CloseRaw(use<ILoop>, FileOsType, use<FsCallback>);
 
-		use<IFsRequest> Open(use<ILoop>, cr_string, int flags,
+		use<IFsRequest> OpenRaw(use<ILoop>, cr_string, int flags,
 			int mode, use<FsCallback>);
 
-		use<IFsRequest> Read(use<ILoop>, FileOsType file, void* buf,
+		use<IFsRequest> ReadRaw(use<ILoop>, FileOsType file, void* buf,
 			std::size_t length, std::int64_t offset, use<FsCallback>);
 
-		use<IFsRequest> Unlink(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> UnlinkRaw(use<ILoop>, cr_string path, use<FsCallback>);
 
-		use<IFsRequest> Write(use<ILoop>, FileOsType file, const void* buf,
+		use<IFsRequest> WriteRaw(use<ILoop>, FileOsType file, const void* buf,
 			std::size_t length, std::int64_t offset, use<FsCallback>);
 
-		use<IFsRequest> Mkdir(use<ILoop>, cr_string path, int mode, use<FsCallback>);
-		use<IFsRequest> Rmdir(use<ILoop>, cr_string, use<FsCallback>);
+		use<IFsRequest> MkdirRaw(use<ILoop>, cr_string path, int mode, use<FsCallback>);
+		use<IFsRequest> RmdirRaw(use<ILoop>, cr_string, use<FsCallback>);
 
-		use<IFsRequest> Readdir( use<ILoop>, cr_string path, int flags, use<FsCallback>);
-		use<IFsRequest> Stat(use<ILoop>, cr_string path, use<FsCallback>);
-		use<IFsRequest> Fstat(use<ILoop>, FileOsType file, use<FsCallback>);
-		use<IFsRequest> Rename(use<ILoop>, cr_string path,cr_string new_path, use<FsCallback>);
-		use<IFsRequest> Fsync(use<ILoop>, FileOsType file, use<FsCallback>);
-		use<IFsRequest> Fdatasync(use<ILoop>, FileOsType file, use<FsCallback>);
-		use<IFsRequest> Ftruncate(use<ILoop>, FileOsType file, 
+		use<IFsRequest> ReaddirRaw( use<ILoop>, cr_string path, int flags, use<FsCallback>);
+		use<IFsRequest> StatRaw(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> FstatRaw(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> RenameRaw(use<ILoop>, cr_string path,cr_string new_path, use<FsCallback>);
+		use<IFsRequest> FsyncRaw(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> FdatasyncRaw(use<ILoop>, FileOsType file, use<FsCallback>);
+		use<IFsRequest> FtruncateRaw(use<ILoop>, FileOsType file, 
 			std::int64_t offset, use<FsCallback>);
-		use<IFsRequest> Sendfile(use<ILoop>, FileOsType file_out, FileOsType file_in,
+		use<IFsRequest> SendfileRaw(use<ILoop>, FileOsType file_out, FileOsType file_in,
 			std::int64_t in_offset, std::size_t length, use<FsCallback>);
-		use<IFsRequest> Chmod(use<ILoop>, cr_string path,
+		use<IFsRequest> ChmodRaw(use<ILoop>, cr_string path,
 			int mode, use<FsCallback>);
-		use<IFsRequest> Utime(use<ILoop>, cr_string path, double atime,
+		use<IFsRequest> UtimeRaw(use<ILoop>, cr_string path, double atime,
 			double mtime, use<FsCallback>);
-		use<IFsRequest> Futime(use<ILoop>, FileOsType file, double atime,
+		use<IFsRequest> FutimeRaw(use<ILoop>, FileOsType file, double atime,
 			double mtime, use<FsCallback>);
-		use<IFsRequest> Lstat(use<ILoop>, cr_string path, use<FsCallback>);
-		use<IFsRequest> Link(use<ILoop>, cr_string path, cr_string new_path,
+		use<IFsRequest> LstatRaw(use<ILoop>, cr_string path, use<FsCallback>);
+		use<IFsRequest> LinkRaw(use<ILoop>, cr_string path, cr_string new_path,
 			use<FsCallback>);
 
-		use<IFsRequest> Symlink(use<ILoop>, cr_string path,
+		use<IFsRequest> SymlinkRaw(use<ILoop>, cr_string path,
 			cr_string new_path, int flags, use<FsCallback>);
-		use<IFsRequest> Readlink(use<ILoop>, cr_string path,
+		use<IFsRequest> ReadlinkRaw(use<ILoop>, cr_string path,
 			use<FsCallback>);
 
-		use<IFsRequest> Fchmod(use<ILoop>, FileOsType file,
+		use<IFsRequest> FchmodRaw(use<ILoop>, FileOsType file,
 			int mode, use<FsCallback>);
 
-		use<IFsRequest> Chown(use<ILoop>, cr_string path, unsigned char uid,
+		use<IFsRequest> ChownRaw(use<ILoop>, cr_string path, unsigned char uid,
 			unsigned char gid, use<FsCallback>);
 
-		use<IFsRequest> Fchown(use<ILoop>, FileOsType, unsigned char uid,
+		use<IFsRequest> FchownRaw(use<ILoop>, FileOsType, unsigned char uid,
 			unsigned char gid, use<FsCallback>);
 
 
 		CPPCOMPONENTS_CONSTRUCT(IFsStatics,
-			Close, Open, Read, Unlink, Write, Mkdir, Rmdir, Readdir, Stat, Fstat,
-			Rename, Fsync, Fdatasync, Ftruncate, Sendfile, Chmod, Utime, Futime,
-			Lstat, Link, Symlink, Readlink, Fchmod, Chown, Fchown);
+			CloseRaw, OpenRaw, ReadRaw, UnlinkRaw, WriteRaw, MkdirRaw, RmdirRaw, ReaddirRaw, StatRaw, FstatRaw,
+			RenameRaw, FsyncRaw, FdatasyncRaw, FtruncateRaw, SendfileRaw, ChmodRaw, UtimeRaw, FutimeRaw,
+			LstatRaw, LinkRaw, SymlinkRaw, ReadlinkRaw, FchmodRaw, ChownRaw, FchownRaw);
+
+
+
 
 
 	};
@@ -1418,6 +1654,602 @@ namespace cppcomponents_libuv{
 	inline std::string FsId(){ return "cppcomponents_libuv_dll!Fs"; }
 	typedef runtime_class<FsId, static_interfaces<IFsStatics>> Fs_t;
 	typedef use_runtime_class<Fs_t> Fs;
+
+	class LoopFile{
+		struct Cleaner{
+			cppcomponents::use<IFsRequest>& r_;
+			Cleaner(cppcomponents::use<IFsRequest>& r) :r_{ r }{}
+
+			~Cleaner(){
+				r_.Cleanup();
+			}
+		};
+
+		FileOsType file_;
+		cppcomponents::use<ILoop> loop_;
+
+
+
+		FileOsType GetFile(){ return file_; }
+		explicit operator bool(){ return file_ >= 0; }
+
+		~LoopFile(){
+			if (*this){
+				Close();
+			}
+		}
+
+		explicit LoopFile(use<ILoop> l, FileOsType f = -1) :loop_{ l }, file_{ f }
+		{}
+
+		LoopFile(const LoopFile&) = delete;
+		LoopFile& operator=(const LoopFile&) = delete;
+
+		LoopFile(LoopFile&& other) :loop_{ std::move(other.loop_) }, file_{ other.file_ }
+		{
+			other.file_ = -1;
+		}
+
+		LoopFile& operator=(LoopFile&& other){
+			loop_ = std::move(other.loop_);
+			file_ = other.file_;
+			other.file_ = -1;
+		}
+
+		cppcomponents::Future<std::intptr_t> Close(){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+
+			};
+
+			Fs::CloseRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+			file_ = -1;
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<FileOsType> Open(cr_string path, int flags,
+			int mode){
+				auto p = cppcomponents::make_promise<FileOsType>();
+				auto pthis = this;
+				auto f = [p,pthis](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						pthis->file_ = n;
+						p.Set(n);
+					
+					}
+				};
+
+				Fs::OpenRaw(loop_, path, flags, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<FileOsType>>();
+		}
+
+		cppcomponents::Future<std::intptr_t> Read(void* buf,
+			std::size_t length, std::int64_t offset){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+
+				};
+
+				Fs::ReadRaw(loop_, file_, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Unlink(cr_string path){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+			};
+
+			Fs::UnlinkRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Write(const void* buf,
+			std::size_t length, std::int64_t offset){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::WriteRaw(loop_, file_, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Mkdir(cr_string path, int mode){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+			};
+
+			Fs::MkdirRaw(loop_, path, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Rmdir(cr_string path){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+			};
+
+			Fs::RmdirRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<std::vector<std::string>> Readdir(cr_string path, int flags){
+			auto p = cppcomponents::make_promise<std::vector < std::string >> ();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					std::vector<std::string> ret;
+					auto pnames = static_cast<char*>(r.GetPtr());
+					// Pnames is a array of null-terminated strings
+					// like this item1\0item2\0
+					for (int i = 0; i < n; i++){
+						std::string name{ pnames };
+						auto sz = name.size();
+						ret.push_back(std::move(name));
+						pnames += (sz + 1);
+					}
+					p.Set(std::move(ret));
+				}
+			};
+
+			Fs::ReaddirRaw(loop_, path, flags, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface < cppcomponents::IFuture < std::vector < std::string >>> ();
+
+		}
+		cppcomponents::Future<Stat> Stat(cr_string path){
+			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(r.GetStatBuf());
+				}
+			};
+
+			Fs::StatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat>>();
+
+		}
+		cppcomponents::Future<cppcomponents_libuv::Stat> Stat(){
+			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(r.GetStatBuf());
+				}
+			};
+
+			Fs::FstatRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat>>();
+		}
+		cppcomponents::Future<std::intptr_t> Rename(cr_string path, cr_string new_path){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+			};
+
+			Fs::RenameRaw(loop_, path, new_path, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Sync(){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+			};
+
+			Fs::FsyncRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Datasync(){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+			};
+
+			Fs::FdatasyncRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Truncate(std::int64_t offset){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::FtruncateRaw(loop_, file_,offset, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Sendfile(FileOsType file_out, FileOsType file_in,
+			std::int64_t in_offset, std::size_t length){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::SendfileRaw(loop_, file_out, file_in, in_offset, length, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}	
+		cppcomponents::Future<std::intptr_t> Sendfile(FileOsType file_out,	std::int64_t in_offset, std::size_t length){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::SendfileRaw(loop_, file_out, file_, in_offset, length, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Chmod(cr_string path,
+			int mode){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::ChmodRaw(loop_, path, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Utime(cr_string path, double atime,
+			double mtime){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::UtimeRaw(loop_, path, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::intptr_t> Utime(double atime,	double mtime){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::FutimeRaw(loop_, file_, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<cppcomponents_libuv::Stat> Lstat(cr_string path){
+			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(r.GetStatBuf());
+				}
+			};
+
+			Fs::LstatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Link(cr_string path, cr_string new_path){
+			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					p.Set(n);
+				}
+			};
+
+			Fs::LinkRaw(loop_, path,new_path, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Symlink(cr_string path,
+			cr_string new_path, int flags){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::SymlinkRaw(loop_, path, new_path, flags, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+		cppcomponents::Future<std::string> Readlink(cr_string path){
+			auto p = cppcomponents::make_promise<std::string>();
+
+			auto f = [p](cppcomponents::use<IFsRequest> r){
+				Cleaner c{ r };
+
+				auto n = r.GetResult();
+				if (n < 0){
+					p.SetError(n);
+				}
+				else{
+					auto pchar = static_cast<const char*>(r.GetPtr());
+					p.Set(std::string{ pchar });
+				}
+			};
+
+			Fs::ReadlinkRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+			return p.QueryInterface<cppcomponents::IFuture<std::string>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Chmod(int mode){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::FchmodRaw(loop_, file_, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Chown(cr_string path, unsigned char uid,
+			unsigned char gid){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::ChownRaw(loop_, path, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+		cppcomponents::Future<std::intptr_t> Chown(unsigned char uid,unsigned char gid){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
+				};
+
+				Fs::FchownRaw(loop_, file_, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+		}
+
+	};
+
 
 
 	struct IFsPoll
@@ -1429,9 +2261,15 @@ namespace cppcomponents_libuv{
 			cppcomponents::uuid<0xb64e98a1, 0xc2a9, 0x4e5f, 0x9bd9, 0x93d0b2913f97>
 		> FsPollCallback;
 
-		void Start(use<FsPollCallback>, cr_string path, unsigned int msinterval);
+		void StartRaw(use<FsPollCallback>, cr_string path, unsigned int msinterval);
 		void Stop();
-		CPPCOMPONENTS_CONSTRUCT(IFsPoll, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(IFsPoll, StartRaw, Stop);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IFsPoll){
+			template<class F>
+			void Start(F f){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<FsPollCallback>(f));
+			}
+		};
 	};
 
 	typedef IFsPoll::FsPollCallback FsPollCallback;
@@ -1460,9 +2298,15 @@ namespace cppcomponents_libuv{
 		> SignalCallback;
 
 
-		void Start(use<SignalCallback>, int signum );
+		void StartRaw(use<SignalCallback>, int signum );
 		void Stop();
-		CPPCOMPONENTS_CONSTRUCT(ISignal, Start, Stop);
+		CPPCOMPONENTS_CONSTRUCT(ISignal, StartRaw, Stop);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ISignal){
+			template<class F>
+			void Start(F f){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<SignalCallback>(f));
+			}
+		};
 	};
 
 	typedef ISignal::SignalCallback SignalCallback;
@@ -1506,6 +2350,15 @@ namespace cppcomponents_libuv{
 			use<FsEventCallback>, int flags);
 
 		CPPCOMPONENTS_CONSTRUCT(IFsEventFactory, Init);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IFsEventFactory){
+			template<class F>
+			use<cppcomponents::InterfaceUnknown> TemplatedConstructor(use<ILoop> loop, cr_string filename,
+				F f, int flags){
+					return this->get_interface().Init(loop,filename,cppcomponents::make_delegate<FsEventCallback>(f),flags);
+			}
+
+		};
 	}; 
 	inline std::string FsEventId(){ return "cppcomponents_libuv_dll!FsEvent"; }
 	typedef runtime_class<FsEventId, object_interfaces<IFsEvent>, factory_interface<IFsEventFactory>> FsEvent_t;
