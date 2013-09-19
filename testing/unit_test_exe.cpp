@@ -8,7 +8,7 @@ namespace{
 	struct MemLeakCheckInit{
 		MemLeakCheckInit(){
 			_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-			//_crtBreakAlloc = 3562;
+			//_crtBreakAlloc = 1654;
 		}
 	};
 
@@ -283,6 +283,7 @@ TEST_CASE("TCP", "TcpStream"){
 
 } 
 
+
 #include <fcntl.h>
 #include <sys/stat.h>
 
@@ -379,4 +380,47 @@ TEST_CASE("fs", "fs1"){
 	loop.Run();
 
 	fut.Get();
+}
+
+TEST_CASE("udp,udp"){
+
+	luv::Loop loop;
+
+	{
+		std::string result;
+
+
+		luv::UdpStream send_socket{ loop };
+		luv::UdpStream recv_socket{ loop };
+
+		auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+
+			auto recv_addr = luv::Uv::Ip4Addr("0.0.0.0", 7768);
+			recv_socket.Bind(recv_addr, 0);
+			recv_socket.RecvStart([&](use<luv::IUdpStream> stream, std::intptr_t nread,
+				cppcomponents::use<cppcomponents::IBuffer> buf, luv::SockAddr addr, unsigned int flags){
+					std::string s{ buf.Begin(), buf.End() };
+					REQUIRE(s == "Hello UDP");
+					stream.RecvStop();
+					result = s;
+			});
+
+			send_socket.Bind(luv::Uv::Ip4Addr("0.0.0.0", 0), 0);
+			send_socket.SetBroadcast(1);
+
+			auto send_addr = luv::Uv::Ip4Addr("255.255.255.255", 7768);
+			REQUIRE(0 == await.as_future(send_socket.Send(std::string("Hello UDP"), send_addr)).ErrorCode());
+
+
+
+		});
+
+		auto fut = func();
+
+		loop.Run();
+		REQUIRE(0 == fut.ErrorCode());
+		REQUIRE(result == "Hello UDP");
+	}
+	loop.Run();
+
 }
