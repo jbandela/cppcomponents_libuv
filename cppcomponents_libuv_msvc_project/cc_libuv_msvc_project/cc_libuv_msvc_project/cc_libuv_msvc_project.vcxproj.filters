@@ -18,6 +18,12 @@
     <ClCompile Include="..\..\..\testing\unit_test_exe.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\testing\test\external\googletest-read-only\src\gtest_main.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\testing\test\external\googletest-read-only\src\gtest-all.cc">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\cppcomponents_libuv\cppcomponents_libuv.hpp">

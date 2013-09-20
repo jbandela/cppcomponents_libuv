@@ -41,7 +41,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(SolutionDir)..\..\..\cppcomponents_libuv\dependencies\libuv\include\;C:\Users\jrb\Source\Repos\boost\;C:\Users\jrb\Source\Repos\cppcomponents;C:\Users\jrb\Source\Repos\cppcomponents_async_coroutine_wrapper;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\..\..\cppcomponents_libuv\dependencies\libuv\include\;C:\Users\jrb\Source\Repos\boost\;C:\Users\jrb\Source\Repos\cppcomponents;C:\Users\jrb\Source\Repos\cppcomponents_async_coroutine_wrapper;$(SolutionDir)..\..\..\cppcomponents_libuv\testing\test\external\googletest-read-only\include\;$(SolutionDir)..\..\..\cppcomponents_libuv\testing\test\external\googletest-read-only\;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
@@ -79,6 +79,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\testing\test\external\googletest-read-only\src\gtest-all.cc" />
+    <ClCompile Include="..\..\..\testing\test\external\googletest-read-only\src\gtest_main.cc" />
     <ClCompile Include="..\..\..\testing\unit_test_exe.cpp">
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4503</DisableSpecificWarnings>
     </ClCompile>
