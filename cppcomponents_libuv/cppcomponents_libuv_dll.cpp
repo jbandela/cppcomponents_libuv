@@ -2044,6 +2044,92 @@ struct ImpRwlock : implement_runtime_class<ImpRwlock, Rwlock_t>{
 	}
 };
 
+
+struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor_t>{
+
+	cppcomponents::LoopExecutor exec_;
+	use<IPrepare> prep_;
+	use<ILoop> loop_;
+	std::atomic<bool> stop_;
+
+	ImpExecutor(use<ILoop> loop) :loop_{ loop }, prep_{ Prepare{ loop } }, stop_{ false }{
+		prep_.Unref();
+	}
+
+
+	~ImpExecutor(){
+		prep_ = nullptr;
+		loop_.Run();
+	}
+
+	typedef delegate < void()> ClosureType;
+
+	void AddDelegate(use<ClosureType> f){
+		exec_.Add(f);
+	}
+	std::size_t NumPendingClosures(){
+		return exec_.NumPendingClosures();
+	}
+	void SetupPrepare(){
+		auto pthis = this;
+		prep_.Start([pthis](cppcomponents::use<IPrepare>, int){
+			pthis->exec_.RunQueuedClosures();
+			if (pthis->stop_.load() == true){
+				pthis->loop_.Stop();
+			}
+		});
+	}
+	void SetupPrepareOne(){
+		auto pthis = this;
+		prep_.Start([pthis](cppcomponents::use<IPrepare>, int){
+			pthis->exec_.TryOneClosure();
+		});
+	}
+
+	void Run(){
+		stop_.store(false);
+		SetupPrepare();
+		loop_.Run();
+		while (exec_.NumPendingClosures() > 0){
+			loop_.Run();
+		}
+		prep_.Stop();
+	}	
+	void Loop(){
+		stop_.store(false);
+		SetupPrepare();
+		while (stop_.load()==false){
+			loop_.Run();
+		}
+		prep_.Stop();
+	}
+	void RunQueuedClosures(){
+		stop_.store(false);
+		SetupPrepare();
+		loop_.RunNoWait();
+		prep_.Stop();
+	}
+	bool TryOneClosure(){
+		stop_.store(false);
+		SetupPrepareOne();
+		loop_.RunOnce();
+		prep_.Stop();
+
+		// Always return true 
+		// since we don't know that loop did not do any work
+		return true;
+	}
+	void MakeLoopExit(){
+		stop_.store(true);
+		exec_.MakeLoopExit();
+	}
+
+	use<ILoop> GetLoop(){
+		return loop_;
+	}
+};
+
+
 CPPCOMPONENTS_DEFINE_FACTORY();
 
 extern "C"{

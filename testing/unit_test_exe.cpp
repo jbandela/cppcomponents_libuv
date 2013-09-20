@@ -20,6 +20,7 @@ namespace{
 #include <mutex>
 #include <thread>
 #include "../cppcomponents_libuv/cppcomponents_libuv.hpp"
+//#define PPL_HELPER_OUTPUT_ENTER_EXIT
 #include <cppcomponents_async_coroutine_wrapper/cppcomponents_resumable_await.hpp>
 
 #include <gtest/gtest.h>
@@ -216,22 +217,21 @@ TEST(connection_fail, connection_fail){
 }
 
 TEST(Tcp, TcpStream){
-	auto loop = luv::Loop{};
+	luv::Executor executor{ luv::Loop{} };
 
 
-	luv::TcpStream server{ loop };
+	luv::TcpStream server{ executor.GetLoop() };
 
 	auto server_addr = luv::Uv::Ip4Addr("0.0.0.0", TEST_PORT);
 
 	server.Bind(server_addr);
 
 
-	luv::Executor executor{ loop };
 
 	server.Listen(1, cppcomponents::resumable<void>([&](use<luv::IStream> stream, int, cppcomponents::awaiter<void> await){
 
 
-		luv::TcpStream client{ loop };
+		luv::TcpStream client{ executor.GetLoop() };
 		stream.Accept(client);
 		auto readchan = client.ReadStartWithChannel();
 
@@ -255,7 +255,7 @@ TEST(Tcp, TcpStream){
 	auto client_func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
 		for (int i = 0; i < 4; i++){
 			auto client_address = luv::Uv::Ip4Addr("127.0.0.1", TEST_PORT);
-			luv::TcpStream client{ loop };
+			luv::TcpStream client{ executor.GetLoop() };
 			await(executor, client.Connect(client_address));
 			auto chan = client.ReadStartWithChannel();
 			await(executor, client.Write(std::string("Hello")));
@@ -270,13 +270,12 @@ TEST(Tcp, TcpStream){
 
 
 		server.Close();
-		executor.Stop();
 
 
 	});
 
 	client_func();
-	loop.Run();
+	executor.Run();
 
 
 }

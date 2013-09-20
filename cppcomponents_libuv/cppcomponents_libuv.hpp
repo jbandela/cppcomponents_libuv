@@ -2499,28 +2499,30 @@ namespace cppcomponents_libuv{
 	// Thead functions not implemented, use std::thread
 
 
-	struct Executor : cppcomponents::LoopExecutor{
-		Prepare prep_;
+	struct ILibUvExecutor :cppcomponents::define_interface < cppcomponents::uuid < 0xc304e6ce , 0xcbaa , 0x4116 , 0xa705 , 0xc4f4b08571e8>,
+	cppcomponents::ILoopExecutor>
+	{
+		use<ILoop> GetLoop();
+		void Run();
 
-		explicit Executor(use<ILoop> loop) :prep_{ loop }{
-			cppcomponents::use<cppcomponents::ILoopExecutor> exec = *this;
-			prep_.Start([exec](cppcomponents::use<IPrepare>, int){
-				exec.RunQueuedClosures();
-			});
-		}
-
-		Executor(const Executor&) = delete;
-		Executor& operator=(const Executor&) = delete;
-
-		~Executor(){
-			prep_.Stop();
-		}
-
-		void Stop(){
-			prep_.Unref();
-		}
+		CPPCOMPONENTS_CONSTRUCT(ILibUvExecutor, GetLoop, Run);
 
 	};
+
+	struct IExecutorFactory :cppcomponents::define_interface < cppcomponents::uuid < 0xe5a34d03, 0xf45e, 0x48ee, 0x9052, 0xde31ae4613fc > >
+	{
+		cppcomponents::use<cppcomponents::InterfaceUnknown> Create(use<ILoop> loop);
+
+		CPPCOMPONENTS_CONSTRUCT(IExecutorFactory, Create);
+	};
+
+	inline std::string ExecutorId(){ return "cppcomponents_libuv_dll!Executor"; }
+	typedef cppcomponents::runtime_class<ExecutorId, cppcomponents::object_interfaces<ILibUvExecutor>,
+		cppcomponents::factory_interface<IExecutorFactory> > Executor_t;
+
+	typedef cppcomponents::use_runtime_class<Executor_t> Executor;
+
+
 
 }
 

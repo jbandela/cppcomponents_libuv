@@ -29,12 +29,6 @@
     <ClInclude Include="..\..\..\cppcomponents_libuv\cppcomponents_libuv.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper_imp.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\..\cppcomponents_libuv\implementation\errors.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

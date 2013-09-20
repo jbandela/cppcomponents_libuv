@@ -45,7 +45,7 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>$(SolutionDir)..\..\dependencies\libuv\include\uv.h;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\..\..\cppcomponents_libuv\dependencies\libuv\include\;C:\Users\jrb\Source\Repos\boost\;C:\Users\jrb\Source\Repos\cppcomponents;C:\Users\jrb\Source\Repos\cppcomponents_async_coroutine_wrapper;$(SolutionDir)..\..\..\cppcomponents_libuv\testing\test\external\googletest-read-only\include\;$(SolutionDir)..\..\..\cppcomponents_libuv\testing\test\external\googletest-read-only\;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -89,8 +89,6 @@
     <ClInclude Include="..\..\..\cppcomponents_libuv\cppcomponents_libuv.hpp" />
     <ClInclude Include="..\..\..\cppcomponents_libuv\implementation\constants.hpp" />
     <ClInclude Include="..\..\..\cppcomponents_libuv\implementation\errors.hpp" />
-    <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper.hpp" />
-    <ClInclude Include="..\..\..\cppcomponents_libuv\ppl_helper_imp.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
