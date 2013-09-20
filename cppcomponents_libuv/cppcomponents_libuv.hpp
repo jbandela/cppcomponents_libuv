@@ -2503,9 +2503,8 @@ namespace cppcomponents_libuv{
 	cppcomponents::ILoopExecutor>
 	{
 		use<ILoop> GetLoop();
-		void Run();
 
-		CPPCOMPONENTS_CONSTRUCT(ILibUvExecutor, GetLoop, Run);
+		CPPCOMPONENTS_CONSTRUCT(ILibUvExecutor, GetLoop);
 
 	};
 

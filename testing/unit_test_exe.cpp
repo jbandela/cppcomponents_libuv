@@ -270,12 +270,13 @@ TEST(Tcp, TcpStream){
 
 
 		server.Close();
+		executor.MakeLoopExit();
 
 
 	});
 
 	client_func();
-	executor.Run();
+	executor.Loop();
 
 
 }

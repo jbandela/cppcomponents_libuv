@@ -2059,7 +2059,7 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 
 	~ImpExecutor(){
 		prep_ = nullptr;
-		loop_.Run();
+		loop_.RunNoWait();
 	}
 
 	typedef delegate < void()> ClosureType;
@@ -2101,6 +2101,7 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 		while (stop_.load()==false){
 			loop_.Run();
 		}
+		loop_.RunNoWait();
 		prep_.Stop();
 	}
 	void RunQueuedClosures(){
