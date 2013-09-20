@@ -217,7 +217,7 @@ TEST(connection_fail, connection_fail){
 }
 
 TEST(Tcp, TcpStream){
-	luv::Executor executor{ luv::Loop{} };
+	auto executor = luv::Uv::DefaultExecutor();
 
 
 	luv::TcpStream server{ executor.GetLoop() };
@@ -417,5 +417,31 @@ TEST(udp, udp){
 	loop.Run();
 	EXPECT_EQ(0, fut.ErrorCode());
 	EXPECT_EQ(result, "Hello UDP");
+
+}
+
+
+TEST(async2, async2){
+
+	auto executor = luv::Uv::DefaultExecutor();
+
+
+	auto func = cppcomponents::resumable<int>([&](cppcomponents::awaiter<int> await){
+
+		auto f1 = luv::Uv::Async([](){return 7; });
+
+		auto f2 = luv::Uv::Async([](){return 3; });
+
+		return await(f1) * await(f2);
+
+
+	});
+
+
+	func().Then([&](cppcomponents::Future<int> fut){
+		EXPECT_EQ(21, fut.Get());
+		executor.MakeLoopExit();
+	});
+	executor.Loop();
 
 }

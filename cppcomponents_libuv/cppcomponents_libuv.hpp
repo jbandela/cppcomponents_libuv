@@ -526,7 +526,7 @@ namespace cppcomponents_libuv{
 			cppcomponents::use<cppcomponents::IFuture<void>> QueueWork(F f){
 				using namespace cppcomponents;
 				auto p = cppcomponents::implement_future_promise<void>::create().QueryInterface<IPromise<void>>();
-				auto w = [f](cppcomponents::use<IWorkRequest>){f(); };
+				auto w = [f](cppcomponents::use<IWorkRequest>)mutable{f(); };
 				auto after = [p](cppcomponents::use<IWorkRequest>, int status){
 					if (status < 0){
 						p.SetError(status);
@@ -613,6 +613,29 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
 	> GetAddrinfoCallback;
 
+	struct ILibUvExecutor :cppcomponents::define_interface < cppcomponents::uuid < 0xc304e6ce, 0xcbaa, 0x4116, 0xa705, 0xc4f4b08571e8>,
+		cppcomponents::ILoopExecutor>
+	{
+		use<ILoop> GetLoop();
+
+		CPPCOMPONENTS_CONSTRUCT(ILibUvExecutor, GetLoop);
+
+	};
+
+	struct IExecutorFactory :cppcomponents::define_interface < cppcomponents::uuid < 0xe5a34d03, 0xf45e, 0x48ee, 0x9052, 0xde31ae4613fc > >
+	{
+		cppcomponents::use<cppcomponents::InterfaceUnknown> Create(use<ILoop> loop);
+
+		CPPCOMPONENTS_CONSTRUCT(IExecutorFactory, Create);
+	};
+
+	inline std::string ExecutorId(){ return "cppcomponents_libuv_dll!Executor"; }
+	typedef cppcomponents::runtime_class<ExecutorId, cppcomponents::object_interfaces<ILibUvExecutor>,
+		cppcomponents::factory_interface<IExecutorFactory> > Executor_t;
+
+	typedef cppcomponents::use_runtime_class<Executor_t> Executor;
+
+
 	struct IUvStatics
 		: cppcomponents::define_interface < cppcomponents::uuid < 0x92979519, 0x8fe7, 0x42cf, 0x8916, 0x6e6e66b46d4a	>>
 	{
@@ -663,6 +686,8 @@ namespace cppcomponents_libuv{
 
 		void DisableStdioInheritance();
 
+		use<ILibUvExecutor> DefaultExecutor();
+
 		// No support for dl* use cross_compiler_interface::module
 
 
@@ -671,14 +696,15 @@ namespace cppcomponents_libuv{
 			GetaddrinfoRaw, Freeaddrinfo, SetupArgs, GetProcessTitle, SetProcessTitle, ResidentSetMemory, Uptime,
 			CpuInfo, InterfaceAddresses, Loadavg, Ip4Addr, Ip6Addr,
 			Ip4Name, Ip6Name, InetNtop, InetPton, Exepath, Cwd, Chdir,
-			GetFreeMemory, GetTotalMemory, Hrtime, DisableStdioInheritance
+			GetFreeMemory, GetTotalMemory, Hrtime, DisableStdioInheritance,
+			DefaultExecutor
 
 			);
 
 
-		CPPCOMPONENTS_INTERFACE_EXTRAS(IUvStatics){
+		CPPCOMPONENTS_STATIC_INTERFACE_EXTRAS(IUvStatics){
 
-			cppcomponents::Future<addrinfo*> Getaddrinfo(cppcomponents::use<ILoop> loop,  cppcomponents::cr_string node,
+			static cppcomponents::Future<addrinfo*> Getaddrinfo(cppcomponents::use<ILoop> loop,  cppcomponents::cr_string node,
 				cppcomponents::cr_string service, addrinfo* hints){
 
 					auto p = cppcomponents::make_promise<addrinfo*>();
@@ -691,9 +717,26 @@ namespace cppcomponents_libuv{
 						}
 					};
 
-					this->get_interface().GetaddrinfoRaw(loop, cppcomponents::make_delegate<GetAddrinfoCallback>(f), node, service, hints);
+					Class::GetaddrinfoRaw(loop, cppcomponents::make_delegate<GetAddrinfoCallback>(f), node, service, hints);
 
 					return p.QueryInterface < cppcomponents::IFuture<addrinfo*>>();
+
+			}
+
+			template<class F>
+			static cppcomponents::Future < typename std::result_of < F()>::type > Async(F f){
+
+				typedef typename std::result_of < F()>::type result_t;
+				
+				auto p = cppcomponents::make_promise<result_t>();
+				auto func = [p, f]()mutable{
+					p.SetResultOf(f);
+				};
+				return Loop::DefaultLoop().QueueWork(func).Then([p](cppcomponents::Future<void> fut){
+					fut.Get();
+					return p.template QueryInterface <cppcomponents::IFuture<result_t>>().Get();
+				
+				});
 
 			}
 
@@ -2499,27 +2542,6 @@ namespace cppcomponents_libuv{
 	// Thead functions not implemented, use std::thread
 
 
-	struct ILibUvExecutor :cppcomponents::define_interface < cppcomponents::uuid < 0xc304e6ce , 0xcbaa , 0x4116 , 0xa705 , 0xc4f4b08571e8>,
-	cppcomponents::ILoopExecutor>
-	{
-		use<ILoop> GetLoop();
-
-		CPPCOMPONENTS_CONSTRUCT(ILibUvExecutor, GetLoop);
-
-	};
-
-	struct IExecutorFactory :cppcomponents::define_interface < cppcomponents::uuid < 0xe5a34d03, 0xf45e, 0x48ee, 0x9052, 0xde31ae4613fc > >
-	{
-		cppcomponents::use<cppcomponents::InterfaceUnknown> Create(use<ILoop> loop);
-
-		CPPCOMPONENTS_CONSTRUCT(IExecutorFactory, Create);
-	};
-
-	inline std::string ExecutorId(){ return "cppcomponents_libuv_dll!Executor"; }
-	typedef cppcomponents::runtime_class<ExecutorId, cppcomponents::object_interfaces<ILibUvExecutor>,
-		cppcomponents::factory_interface<IExecutorFactory> > Executor_t;
-
-	typedef cppcomponents::use_runtime_class<Executor_t> Executor;
 
 
 
