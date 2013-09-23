@@ -613,12 +613,12 @@ namespace cppcomponents_libuv{
 		cppcomponents::uuid < 0x3249125d, 0x8a0b, 0x488c, 0xbf11, 0x9968f4e8a85d >
 	> GetAddrinfoCallback;
 
-	struct ILibUvExecutor :cppcomponents::define_interface < cppcomponents::uuid < 0xc304e6ce, 0xcbaa, 0x4116, 0xa705, 0xc4f4b08571e8>,
+	struct IUvExecutor :cppcomponents::define_interface < cppcomponents::uuid < 0xc304e6ce, 0xcbaa, 0x4116, 0xa705, 0xc4f4b08571e8>,
 		cppcomponents::ILoopExecutor>
 	{
 		use<ILoop> GetLoop();
 
-		CPPCOMPONENTS_CONSTRUCT(ILibUvExecutor, GetLoop);
+		CPPCOMPONENTS_CONSTRUCT(IUvExecutor, GetLoop);
 
 	};
 
@@ -630,7 +630,7 @@ namespace cppcomponents_libuv{
 	};
 
 	inline std::string ExecutorId(){ return "cppcomponents_libuv_dll!Executor"; }
-	typedef cppcomponents::runtime_class<ExecutorId, cppcomponents::object_interfaces<ILibUvExecutor>,
+	typedef cppcomponents::runtime_class<ExecutorId, cppcomponents::object_interfaces<IUvExecutor>,
 		cppcomponents::factory_interface<IExecutorFactory> > Executor_t;
 
 	typedef cppcomponents::use_runtime_class<Executor_t> Executor;
@@ -686,7 +686,7 @@ namespace cppcomponents_libuv{
 
 		void DisableStdioInheritance();
 
-		use<ILibUvExecutor> DefaultExecutor();
+		use<IUvExecutor> DefaultExecutor();
 
 		// No support for dl* use cross_compiler_interface::module
 
@@ -967,6 +967,7 @@ namespace cppcomponents_libuv{
 	typedef IStream::IShutdownRequest IShutdownRequest;
 
 
+	typedef IStream IUvStream;
 
 
 	struct ITcpStream
@@ -2427,12 +2428,12 @@ namespace cppcomponents_libuv{
 	typedef use_runtime_class<Fs_t> Fs;
 
 	class LoopExiter{
-		use<ILibUvExecutor> exec_;
+		use<IUvExecutor> exec_;
 		LoopExiter(const LoopExiter&) = delete;
 		LoopExiter& operator=(const LoopExiter&) = delete;
 
 	public:
-		LoopExiter(use<ILibUvExecutor>  exec) :exec_{ exec }{}
+		LoopExiter(use<IUvExecutor>  exec) :exec_{ exec }{}
 		LoopExiter() :exec_{ Uv::DefaultExecutor() }{}
 
 		void reset(){

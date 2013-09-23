@@ -217,21 +217,23 @@ TEST(connection_fail, connection_fail){
 }
 
 TEST(Tcp, TcpStream){
-	auto executor = luv::Uv::DefaultExecutor();
+	using namespace cppcomponents_libuv;
+
+	auto executor = Uv::DefaultExecutor();
 
 
-	luv::TcpStream server;
+	TcpStream server;
 
-	auto server_addr = luv::Uv::Ip4Addr("0.0.0.0", TEST_PORT);
+	auto server_addr = Uv::Ip4Addr("0.0.0.0", TEST_PORT);
 
 	server.Bind(server_addr);
 
 
 
-	server.Listen(1, cppcomponents::resumable<void>([&](use<luv::IStream> stream, int, cppcomponents::awaiter<void> await){
+	server.Listen(1, cppcomponents::resumable<void>([&](use<IUvStream> stream, int, cppcomponents::awaiter<void> await){
 
 
-		luv::TcpStream client;
+		TcpStream client;
 		stream.Accept(client);
 		auto readchan = client.ReadStartWithChannel();
 
@@ -254,8 +256,8 @@ TEST(Tcp, TcpStream){
 
 	auto client_func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
 		for (int i = 0; i < 4; i++){
-			auto client_address = luv::Uv::Ip4Addr("127.0.0.1", TEST_PORT);
-			luv::TcpStream client;
+			auto client_address = Uv::Ip4Addr("127.0.0.1", TEST_PORT);
+			TcpStream client;
 			await(executor, client.Connect(client_address));
 			auto chan = client.ReadStartWithChannel();
 			await(executor, client.Write(std::string("Hello")));
@@ -287,21 +289,22 @@ TEST(Tcp, TcpStream){
 #include <sys/stat.h>
 
 TEST(fs, fs1){
+		using namespace cppcomponents_libuv;
 
 
 
 	auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
-		luv::LoopExiter exiter;
-		auto cwd = luv::Uv::Cwd();
+
+		LoopExiter exiter;
 		
-		using luv::Fs;
+
 
 		// Make a file
 		std::string dir = "./testdir/";
 		std::string filename = "./testdir/testfile.txt";
 
 		// Create a directory
-		EXPECT_EQ(0, await.as_future(luv::Fs::Mkdir("./testdir", S_IWRITE | S_IREAD | S_IFDIR | S_IEXEC)).ErrorCode());
+		EXPECT_EQ(0, await.as_future(Fs::Mkdir("./testdir", S_IWRITE | S_IREAD | S_IFDIR | S_IEXEC)).ErrorCode());
 
 		// Create a file in the directory
 		auto openfut = await.as_future(Fs::Open(filename, O_CREAT | O_RDWR, S_IWRITE | S_IREAD));
@@ -389,7 +392,7 @@ TEST(fs, fs1){
 
 	auto fut = func();
 
-	luv::Uv::DefaultExecutor().Loop();
+	Uv::DefaultExecutor().Loop();
 
 	fut.Get();
 

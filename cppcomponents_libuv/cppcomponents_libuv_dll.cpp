@@ -1470,7 +1470,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 		uv_disable_stdio_inheritance();
 	}
 
-	static use<ILibUvExecutor> DefaultExecutor(){
+	static use<IUvExecutor> DefaultExecutor(){
 		struct uniq{};
 		return cross_compiler_interface::detail::safe_static_init<Executor, uniq>::get(Loop::DefaultLoop());
 	}
