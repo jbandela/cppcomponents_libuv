@@ -722,6 +722,12 @@ namespace cppcomponents_libuv{
 					return p.QueryInterface < cppcomponents::IFuture<addrinfo*>>();
 
 			}
+			static cppcomponents::Future<addrinfo*> Getaddrinfo(cppcomponents::cr_string node,
+				cppcomponents::cr_string service, addrinfo* hints){
+
+					return Getaddrinfo(Loop::DefaultLoop(), node, service, hints);
+
+			}
 
 			template<class F>
 			static cppcomponents::Future < typename std::result_of < F()>::type > Async(F f){
@@ -1031,6 +1037,13 @@ namespace cppcomponents_libuv{
 		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>);
 
 		CPPCOMPONENTS_CONSTRUCT(ILoopInitFactory, Init);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ILoopInitFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(){
+				return this->get_interface().Init(Loop::DefaultLoop());
+			}
+		};
 	};
 	inline std::string TcpStreamId(){return "cppcomponents_libuv_dll!TcpStream";}
 	typedef runtime_class<TcpStreamId, object_interfaces<ITcpStream>, factory_interface<ILoopInitFactory>> TcpStream_t;
@@ -1204,6 +1217,12 @@ namespace cppcomponents_libuv{
 
 
 		CPPCOMPONENTS_CONSTRUCT(ITtyFactory, Init);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ITtyFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(FileOsType fd, bool readable){
+				return this->get_interface().Init(Loop::DefaultLoop(),fd,readable);
+			}
+		};
 	};
 
 	struct ITtyStatics
@@ -1263,6 +1282,12 @@ namespace cppcomponents_libuv{
 
 
 		CPPCOMPONENTS_CONSTRUCT(IPipeFactory, Init);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IPipeFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(bool ipc){
+				return this->get_interface().Init(Loop::DefaultLoop(), ipc);
+			}
+		};
 	};
 	inline std::string PipeId(){ return "cppcomponents_libuv_dll!Pipe"; }
 	typedef runtime_class<PipeId, object_interfaces<IPipe>, factory_interface<IPipeFactory>> Pipe_t;
@@ -1304,6 +1329,12 @@ namespace cppcomponents_libuv{
 
 
 		CPPCOMPONENTS_CONSTRUCT(IPollFactory, Init);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IPollFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(std::int64_t fileorsocket, bool isfile){
+				return this->get_interface().Init(Loop::DefaultLoop(),fileorsocket, isfile);
+			}
+		};
 	};
 
 	inline std::string PollId(){ return "cppcomponents_libuv_dll!Poll"; }
@@ -1425,7 +1456,10 @@ namespace cppcomponents_libuv{
 			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(cppcomponents::use<ILoop> loop,F f){
 				return this->get_interface().Init(loop, cppcomponents::make_delegate<AsyncCallback>(f));
 			}
-
+			template<class F>
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(F f){
+				return TemplatedConstructor(Loop::DefaultLoop(),f);
+			}
 		};
 	};
 
@@ -1492,6 +1526,12 @@ namespace cppcomponents_libuv{
 		cppcomponents::use<cppcomponents::InterfaceUnknown> Init(cppcomponents::use<ILoop>);
 
 		CPPCOMPONENTS_CONSTRUCT(ITimerFactory, Init);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ITimerFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(){
+				return this->get_interface().Init(Loop::DefaultLoop());
+			}
+		};
 	};
 	inline std::string TimerId(){ return "cppcomponents_libuv_dll!Timer"; }
 	typedef runtime_class<TimerId, object_interfaces<ITimer>, factory_interface<ITimerFactory>> Timer_t;
@@ -1588,6 +1628,14 @@ namespace cppcomponents_libuv{
 		cppcomponents::use<cppcomponents::InterfaceUnknown> Spawn(cppcomponents::use<ILoop>, cppcomponents::use<IProcessOptions>);
 
 		CPPCOMPONENTS_CONSTRUCT(IProcessFactory, Spawn);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ITimerFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(cppcomponents::use<IProcessOptions> po){
+				return this->get_interface().Spawn(Loop::DefaultLoop(),po);
+			}
+		};
+
 	};
 	struct IProcessStatics
 		: public cppcomponents::define_interface<
@@ -1691,14 +1739,8 @@ namespace cppcomponents_libuv{
 
 
 
-
-	};
-
-	inline std::string FsId(){ return "cppcomponents_libuv_dll!Fs"; }
-	typedef runtime_class<FsId, static_interfaces<IFsStatics>> Fs_t;
-	typedef use_runtime_class<Fs_t> Fs;
-
-	class LoopFile{
+		CPPCOMPONENTS_STATIC_INTERFACE_EXTRAS(IFsStatics){
+	private:
 		struct Cleaner{
 			cppcomponents::use<IFsRequest>* r_;
 			Cleaner(cppcomponents::use<IFsRequest>& r) :r_{ &r } {}
@@ -1707,128 +1749,87 @@ namespace cppcomponents_libuv{
 				r_->Cleanup();
 			}
 		};
+		public:
+			static cppcomponents::Future<std::intptr_t> Close(use<ILoop> loop, FileOsType file){
+				auto p = cppcomponents::make_promise<std::intptr_t>();
 
-		FileOsType file_;
-		cppcomponents::use<ILoop> loop_;
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(n);
+					}
 
-	public:
+				};
 
-		FileOsType GetFile(){ return file_; }
-		explicit operator bool(){ return file_ >= 0; }
+				Class::CloseRaw(loop, file, cppcomponents::make_delegate<FsCallback>(f));
+				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		~LoopFile(){
-			if (*this){
-				Close();
 			}
-		}
+			static cppcomponents::Future<std::intptr_t> Close(FileOsType file){
+				return Close(Loop::DefaultLoop(), file);
+			}
 
-		explicit LoopFile(use<ILoop> l, FileOsType f = -1) :loop_{ l }, file_{ f }
-		{}
 
-		LoopFile(const LoopFile&) = delete;
-		LoopFile& operator=(const LoopFile&) = delete;
+			static cppcomponents::Future<FileOsType> Open(use<ILoop> loop, cppcomponents::cr_string path, int flags,
+				int mode){
+					auto p = cppcomponents::make_promise<FileOsType>();
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
 
-		LoopFile(LoopFile&& other) :loop_{ std::move(other.loop_) }, file_{ other.file_ }
-		{
-			other.file_ = -1;
-		}
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
 
-		LoopFile& operator=(LoopFile&& other){
-			loop_ = std::move(other.loop_);
-			file_ = other.file_;
-			other.file_ = -1;
-		}
+						}
+					};
 
-		cppcomponents::Future<std::intptr_t> Close(){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
+					Class::OpenRaw(loop, path, flags, mode, cppcomponents::make_delegate<FsCallback>(f));
 
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
+					return p.QueryInterface<cppcomponents::IFuture<FileOsType>>();
+			}
 
-			};
+			static cppcomponents::Future<FileOsType> Open(cppcomponents::cr_string path, int flags,int mode){
 
-			Fs::CloseRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
-			file_ = -1;
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+				return Open(Loop::DefaultLoop(), path, flags, mode);
+			}
 
-		}
 
-		cppcomponents::Future<FileOsType> Open(cr_string path, int flags,
-			int mode){
-				auto p = cppcomponents::make_promise<FileOsType>();
-				auto pthis = this;
-				auto f = [p,pthis](cppcomponents::use<IFsRequest> r){
-					Cleaner c{ r };
+			static cppcomponents::Future<std::intptr_t> Read(use<ILoop> loop, FileOsType file, void* buf,
+				std::size_t length, std::int64_t offset){
+					auto p = cppcomponents::make_promise<std::intptr_t>();
 
-					auto n = r.GetResult();
-					if (n < 0){
-						p.SetError(n);
-					}
-					else{
-						pthis->file_ = n;
-						p.Set(n);
-					
-					}
-				};
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
 
-				Fs::OpenRaw(loop_, path, flags, mode, cppcomponents::make_delegate<FsCallback>(f));
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
+						}
 
-				return p.QueryInterface<cppcomponents::IFuture<FileOsType>>();
-		}
+					};
 
-		cppcomponents::Future<std::intptr_t> Read(void* buf,
-			std::size_t length, std::int64_t offset){
-				auto p = cppcomponents::make_promise<std::intptr_t>();
+					Class::ReadRaw(loop, file, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
 
-				auto f = [p](cppcomponents::use<IFsRequest> r){
-					Cleaner c{ r };
+					return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-					auto n = r.GetResult();
-					if (n < 0){
-						p.SetError(n);
-					}
-					else{
-						p.Set(n);
-					}
+			}
+			static cppcomponents::Future<std::intptr_t> Read(FileOsType file, void* buf,
+				std::size_t length, std::int64_t offset){
 
-				};
+					return Read(Loop::DefaultLoop(), file, buf, length, offset);
+			}
 
-				Fs::ReadRaw(loop_, file_, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
-
-				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
-
-		}
-
-		cppcomponents::Future<std::intptr_t> Unlink(cr_string path){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
-
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
-			};
-
-			Fs::UnlinkRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
-
-		}
-
-		cppcomponents::Future<std::intptr_t> Write(const void* buf,
-			std::size_t length, std::int64_t offset){
+			static cppcomponents::Future<std::intptr_t> Unlink(use<ILoop> loop, cr_string path){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -1843,183 +1844,42 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::WriteRaw(loop_, file_, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
+				Class::UnlinkRaw(loop, path, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
+			}
 
-		cppcomponents::Future<std::intptr_t> Mkdir(cr_string path, int mode){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
+			static cppcomponents::Future<std::intptr_t> Unlink(cr_string path){
 
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
+				return Unlink(Loop::DefaultLoop(), path);
+			}
+			static cppcomponents::Future<std::intptr_t> Write(use<ILoop> loop, FileOsType file, const void* buf, std::size_t length, std::int64_t offset){
+					auto p = cppcomponents::make_promise<std::intptr_t>();
 
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
-			};
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
 
-			Fs::MkdirRaw(loop_, path, mode, cppcomponents::make_delegate<FsCallback>(f));
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
+						}
+					};
 
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+					Class::WriteRaw(loop, file, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
 
-		}
-		cppcomponents::Future<std::intptr_t> Rmdir(cr_string path){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
+					return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
+			}
 
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
-			};
+			static cppcomponents::Future<std::intptr_t> Write(FileOsType file, const void* buf, std::size_t length, std::int64_t offset){
+				return Write(Loop::DefaultLoop(), file, buf, length, offset);
+			}
 
-			Fs::RmdirRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
-
-		}
-
-		cppcomponents::Future<std::vector<std::string>> Readdir(cr_string path, int flags){
-			auto p = cppcomponents::make_promise<std::vector < std::string >> ();
-
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					std::vector<std::string> ret;
-					auto pnames = static_cast<char*>(r.GetPtr());
-					// Pnames is a array of null-terminated strings
-					// like this item1\0item2\0
-					for (int i = 0; i < n; i++){
-						std::string name{ pnames };
-						auto sz = name.size();
-						ret.push_back(std::move(name));
-						pnames += (sz + 1);
-					}
-					p.Set(std::move(ret));
-				}
-			};
-
-			Fs::ReaddirRaw(loop_, path, flags, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface < cppcomponents::IFuture < std::vector < std::string >>> ();
-
-		}
-		cppcomponents::Future<Stat_t> Stat(cr_string path){
-			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
-
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(r.GetStatBuf());
-				}
-			};
-
-			Fs::StatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
-
-		}
-		cppcomponents::Future<cppcomponents_libuv::Stat_t> Stat(){
-			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
-
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(r.GetStatBuf());
-				}
-			};
-
-			Fs::FstatRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
-		}
-		cppcomponents::Future<std::intptr_t> Rename(cr_string path, cr_string new_path){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
-
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
-			};
-
-			Fs::RenameRaw(loop_, path, new_path, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
-
-		}
-		cppcomponents::Future<std::intptr_t> Sync(){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
-
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
-			};
-
-			Fs::FsyncRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
-
-		}
-		cppcomponents::Future<std::intptr_t> Datasync(){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
-
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
-
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
-			};
-
-			Fs::FdatasyncRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
-
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
-
-		}
-		cppcomponents::Future<std::intptr_t> Truncate(std::int64_t offset){
+			static cppcomponents::Future<std::intptr_t> Mkdir(use<ILoop> loop, cr_string path, int mode){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2034,13 +1894,17 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::FtruncateRaw(loop_, file_,offset, cppcomponents::make_delegate<FsCallback>(f));
+				Class::MkdirRaw(loop, path, mode, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
-		cppcomponents::Future<std::intptr_t> Sendfile(FileOsType file_out, FileOsType file_in,
-			std::int64_t in_offset, std::size_t length){
+			}
+			
+			static cppcomponents::Future<std::intptr_t> Mkdir(cr_string path, int mode){
+				return Mkdir(Loop::DefaultLoop(), path, mode);
+			}
+
+			static cppcomponents::Future<std::intptr_t> Rmdir(use<ILoop> loop,  cr_string path){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2055,12 +1919,102 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::SendfileRaw(loop_, file_out, file_in, in_offset, length, cppcomponents::make_delegate<FsCallback>(f));
+				Class::RmdirRaw(loop, path, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}	
-		cppcomponents::Future<std::intptr_t> Sendfile(FileOsType file_out,	std::int64_t in_offset, std::size_t length){
+			}
+
+			static cppcomponents::Future<std::intptr_t> Rmdir(cr_string path){
+				return Rmdir(Loop::DefaultLoop(), path);
+			}
+
+			static cppcomponents::Future<std::vector<std::string>> Readdir(use<ILoop> loop, cr_string path, int flags){
+				auto p = cppcomponents::make_promise<std::vector < std::string >>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						std::vector<std::string> ret;
+						auto pnames = static_cast<char*>(r.GetPtr());
+						// Pnames is a array of null-terminated strings
+						// like this item1\0item2\0
+						for (int i = 0; i < n; i++){
+							std::string name{ pnames };
+							auto sz = name.size();
+							ret.push_back(std::move(name));
+							pnames += (sz + 1);
+						}
+						p.Set(std::move(ret));
+					}
+				};
+
+				Class::ReaddirRaw(loop, path, flags, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface < cppcomponents::IFuture < std::vector < std::string >> >();
+
+			}
+			
+
+			static cppcomponents::Future<std::vector<std::string>> Readdir(cr_string path, int flags){
+				return Readdir(Loop::DefaultLoop(), path, flags);
+			}
+			static cppcomponents::Future<Stat_t> Stat(use<ILoop> loop, cr_string path){
+				auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(r.GetStatBuf());
+					}
+				};
+
+				Class::StatRaw(loop, path, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
+
+			}
+
+			static cppcomponents::Future<Stat_t> Stat(cr_string path){
+				return Stat(Loop::DefaultLoop(), path);
+			}
+
+
+			static cppcomponents::Future<cppcomponents_libuv::Stat_t> Stat(use<ILoop> loop, FileOsType file ){
+				auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(r.GetStatBuf());
+					}
+				};
+
+				Class::FstatRaw(loop, file, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
+			}
+
+			static cppcomponents::Future<cppcomponents_libuv::Stat_t> Stat(FileOsType file){
+				return Stat(Loop::DefaultLoop(), file);
+			}
+
+			static cppcomponents::Future<std::intptr_t> Rename(use<ILoop> loop, cr_string path, cr_string new_path){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2075,13 +2029,18 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::SendfileRaw(loop_, file_out, file_, in_offset, length, cppcomponents::make_delegate<FsCallback>(f));
+				Class::RenameRaw(loop, path, new_path, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
-		cppcomponents::Future<std::intptr_t> Chmod(cr_string path,
-			int mode){
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Rename(cr_string path, cr_string new_path){
+				return Rename(Loop::DefaultLoop(), path, new_path);
+			}
+
+			static cppcomponents::Future<std::intptr_t> Sync(use<ILoop> loop, FileOsType file ){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2096,13 +2055,19 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::ChmodRaw(loop_, path, mode, cppcomponents::make_delegate<FsCallback>(f));
+				Class::FsyncRaw(loop, file, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
-		cppcomponents::Future<std::intptr_t> Utime(cr_string path, double atime,
-			double mtime){
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Sync(FileOsType file){
+
+				return Sync(Loop::DefaultLoop(), file);
+			}
+
+			static cppcomponents::Future<std::intptr_t> Datasync(use<ILoop> loop, FileOsType file ){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2117,12 +2082,19 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::UtimeRaw(loop_, path, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
+				Class::FdatasyncRaw(loop, file, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
-		cppcomponents::Future<std::intptr_t> Utime(double atime,	double mtime){
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Datasync(FileOsType file){
+				return Datasync(Loop::DefaultLoop(), file);
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Truncate(use<ILoop> loop, FileOsType file, std::int64_t offset){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2137,55 +2109,97 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::FutimeRaw(loop_, file_, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
+				Class::FtruncateRaw(loop, file, offset, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
-		cppcomponents::Future<cppcomponents_libuv::Stat_t> Lstat(cr_string path){
-			auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
+			}
 
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
 
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(r.GetStatBuf());
-				}
-			};
+			static cppcomponents::Future<std::intptr_t> Truncate( FileOsType file, std::int64_t offset){
+				return Truncate(Loop::DefaultLoop(), file, offset);
+			}
+			static cppcomponents::Future<std::intptr_t> Sendfile(use<ILoop> loop, FileOsType file_out, FileOsType file_in,	std::int64_t in_offset, std::size_t length){
+					auto p = cppcomponents::make_promise<std::intptr_t>();
 
-			Fs::LstatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
 
-			return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
+						}
+					};
 
-		}
+					Class::SendfileRaw(loop, file_out, file_in, in_offset, length, cppcomponents::make_delegate<FsCallback>(f));
 
-		cppcomponents::Future<std::intptr_t> Link(cr_string path, cr_string new_path){
-			auto p = cppcomponents::make_promise<std::intptr_t>();
+					return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
+			}
 
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					p.Set(n);
-				}
-			};
 
-			Fs::LinkRaw(loop_, path,new_path, cppcomponents::make_delegate<FsCallback>(f));
+			static cppcomponents::Future<std::intptr_t> Sendfile(FileOsType file_out, FileOsType file_in, std::int64_t in_offset, std::size_t length){
+				return Sendfile(Loop::DefaultLoop(), file_out, file_in, in_offset, length);
+			}
 
-			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+			static cppcomponents::Future<std::intptr_t> Chmod(use<ILoop> loop,  cr_string path, int mode){
+					auto p = cppcomponents::make_promise<std::intptr_t>();
 
-		}
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
 
-		cppcomponents::Future<std::intptr_t> Symlink(cr_string path,
-			cr_string new_path, int flags){
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
+						}
+					};
+
+					Class::ChmodRaw(loop, path, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+					return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Chmod(cr_string path, int mode){
+				return Chmod(Loop::DefaultLoop(), path, mode);
+			}
+
+			static cppcomponents::Future<std::intptr_t> Utime(use<ILoop> loop, cr_string path, double atime, double mtime){
+					auto p = cppcomponents::make_promise<std::intptr_t>();
+
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
+
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
+						}
+					};
+
+					Class::UtimeRaw(loop, path, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
+
+					return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+			}
+
+
+
+			static cppcomponents::Future<std::intptr_t> Utime(cr_string path, double atime, double mtime){
+				return Utime(Loop::DefaultLoop(), path, atime, mtime);
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Utime(use<ILoop> loop, FileOsType file, double atime, double mtime){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2200,34 +2214,48 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::SymlinkRaw(loop_, path, new_path, flags, cppcomponents::make_delegate<FsCallback>(f));
+				Class::FutimeRaw(loop, file, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
-		cppcomponents::Future<std::string> Readlink(cr_string path){
-			auto p = cppcomponents::make_promise<std::string>();
+			}
 
-			auto f = [p](cppcomponents::use<IFsRequest> r){
-				Cleaner c{ r };
 
-				auto n = r.GetResult();
-				if (n < 0){
-					p.SetError(n);
-				}
-				else{
-					auto pchar = static_cast<const char*>(r.GetPtr());
-					p.Set(std::string{ pchar });
-				}
-			};
+			static cppcomponents::Future<std::intptr_t> Utime(FileOsType file, double atime, double mtime){
+				return Utime(Loop::DefaultLoop(), file, atime, mtime);
+			}
 
-			Fs::ReadlinkRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
 
-			return p.QueryInterface<cppcomponents::IFuture<std::string>>();
 
-		}
+			static cppcomponents::Future<cppcomponents_libuv::Stat_t> Lstat(use<ILoop> loop,  cr_string path){
+				auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
 
-		cppcomponents::Future<std::intptr_t> Chmod(int mode){
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						p.Set(r.GetStatBuf());
+					}
+				};
+
+				Class::LstatRaw(loop, path, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
+
+			}
+
+
+			static cppcomponents::Future<cppcomponents_libuv::Stat_t> Lstat(cr_string path){
+				return Lstat(Loop::DefaultLoop(), path);
+			}
+
+
+
+			static cppcomponents::Future<std::intptr_t> Link(use<ILoop> loop,  cr_string path, cr_string new_path){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2242,14 +2270,75 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::FchmodRaw(loop_, file_, mode, cppcomponents::make_delegate<FsCallback>(f));
+				Class::LinkRaw(loop, path, new_path, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
+			}
 
-		cppcomponents::Future<std::intptr_t> Chown(cr_string path, unsigned char uid,
-			unsigned char gid){
+
+			static cppcomponents::Future<std::intptr_t> Link(cr_string path, cr_string new_path){
+				return Link(Loop::DefaultLoop(), path, new_path);
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Symlink(use<ILoop> loop, cr_string path, cr_string new_path, int flags){
+					auto p = cppcomponents::make_promise<std::intptr_t>();
+
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
+
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
+						}
+					};
+
+					Class::SymlinkRaw(loop, path, new_path, flags, cppcomponents::make_delegate<FsCallback>(f));
+
+					return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Symlink(cr_string path, cr_string new_path, int flags){
+				return Symlink(Loop::DefaultLoop(), path, new_path, flags);
+			}
+
+
+
+			static cppcomponents::Future<std::string> Readlink(use<ILoop> loop,  cr_string path){
+				auto p = cppcomponents::make_promise<std::string>();
+
+				auto f = [p](cppcomponents::use<IFsRequest> r){
+					Cleaner c{ r };
+
+					auto n = r.GetResult();
+					if (n < 0){
+						p.SetError(n);
+					}
+					else{
+						auto pchar = static_cast<const char*>(r.GetPtr());
+						p.Set(std::string{ pchar });
+					}
+				};
+
+				Class::ReadlinkRaw(loop, path, cppcomponents::make_delegate<FsCallback>(f));
+
+				return p.QueryInterface<cppcomponents::IFuture<std::string>>();
+
+			}
+
+
+			static cppcomponents::Future<std::string> Readlink(cr_string path){
+				return Readlink(Loop::DefaultLoop(), path);
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Chmod(use<ILoop> loop, FileOsType file, int mode){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2264,13 +2353,47 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::ChownRaw(loop_, path, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
+				Class::FchmodRaw(loop, file, mode, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
+			}
 
-		cppcomponents::Future<std::intptr_t> Chown(unsigned char uid,unsigned char gid){
+
+			static cppcomponents::Future<std::intptr_t> Chmod(FileOsType file, int mode){
+				return Chmod(Loop::DefaultLoop(), file, mode);
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Chown(use<ILoop> loop, cr_string path, unsigned char uid,	unsigned char gid){
+					auto p = cppcomponents::make_promise<std::intptr_t>();
+
+					auto f = [p](cppcomponents::use<IFsRequest> r){
+						Cleaner c{ r };
+
+						auto n = r.GetResult();
+						if (n < 0){
+							p.SetError(n);
+						}
+						else{
+							p.Set(n);
+						}
+					};
+
+					Class::ChownRaw(loop, path, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
+
+					return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+			}
+
+			
+			static cppcomponents::Future<std::intptr_t> Chown(cr_string path, unsigned char uid, unsigned char gid){
+				return Chown(Loop::DefaultLoop(), path, uid, gid);
+			}
+
+
+
+			static cppcomponents::Future<std::intptr_t> Chown(use<ILoop> loop, FileOsType file,  unsigned char uid, unsigned char gid){
 				auto p = cppcomponents::make_promise<std::intptr_t>();
 
 				auto f = [p](cppcomponents::use<IFsRequest> r){
@@ -2285,13 +2408,611 @@ namespace cppcomponents_libuv{
 					}
 				};
 
-				Fs::FchownRaw(loop_, file_, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
+				Class::FchownRaw(loop, file, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
 
 				return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
 
-		}
+			}
+
+
+			static cppcomponents::Future<std::intptr_t> Chown(FileOsType file, unsigned char uid, unsigned char gid){
+				return Chown(Loop::DefaultLoop(), , file, uid, gid);
+			}
+		};
 
 	};
+
+	inline std::string FsId(){ return "cppcomponents_libuv_dll!Fs"; }
+	typedef runtime_class<FsId, static_interfaces<IFsStatics>> Fs_t;
+	typedef use_runtime_class<Fs_t> Fs;
+
+	//class LoopFile{
+
+
+	//	FileOsType file_;
+	//	cppcomponents::use<ILoop> loop_;
+
+	//public:
+
+	//	FileOsType GetFile(){ return file_; }
+	//	explicit operator bool(){ return file_ >= 0; }
+
+	//	~LoopFile(){
+	//		if (*this){
+	//			Close();
+	//		}
+	//	}
+
+	//	explicit LoopFile(use<ILoop> l, FileOsType f = -1) :loop_{ l }, file_{ f }
+	//	{}
+
+	//	LoopFile(const LoopFile&) = delete;
+	//	LoopFile& operator=(const LoopFile&) = delete;
+
+	//	LoopFile(LoopFile&& other) :loop_{ std::move(other.loop_) }, file_{ other.file_ }
+	//	{
+	//		other.file_ = -1;
+	//	}
+
+	//	LoopFile& operator=(LoopFile&& other){
+	//		loop_ = std::move(other.loop_);
+	//		file_ = other.file_;
+	//		other.file_ = -1;
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Close(){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+
+	//		};
+
+	//		Fs::CloseRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+	//		file_ = -1;
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<FileOsType> Open(cr_string path, int flags,
+	//		int mode){
+	//			auto p = cppcomponents::make_promise<FileOsType>();
+	//			auto pthis = this;
+	//			auto f = [p,pthis](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					pthis->file_ = n;
+	//					p.Set(n);
+	//				
+	//				}
+	//			};
+
+	//			Fs::OpenRaw(loop_, path, flags, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<FileOsType>>();
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Read(void* buf,
+	//		std::size_t length, std::int64_t offset){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+
+	//			};
+
+	//			Fs::ReadRaw(loop_, file_, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Unlink(cr_string path){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+	//		};
+
+	//		Fs::UnlinkRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Write(const void* buf,
+	//		std::size_t length, std::int64_t offset){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::WriteRaw(loop_, file_, buf, length, offset, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Mkdir(cr_string path, int mode){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+	//		};
+
+	//		Fs::MkdirRaw(loop_, path, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Rmdir(cr_string path){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+	//		};
+
+	//		Fs::RmdirRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::vector<std::string>> Readdir(cr_string path, int flags){
+	//		auto p = cppcomponents::make_promise<std::vector < std::string >> ();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				std::vector<std::string> ret;
+	//				auto pnames = static_cast<char*>(r.GetPtr());
+	//				// Pnames is a array of null-terminated strings
+	//				// like this item1\0item2\0
+	//				for (int i = 0; i < n; i++){
+	//					std::string name{ pnames };
+	//					auto sz = name.size();
+	//					ret.push_back(std::move(name));
+	//					pnames += (sz + 1);
+	//				}
+	//				p.Set(std::move(ret));
+	//			}
+	//		};
+
+	//		Fs::ReaddirRaw(loop_, path, flags, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface < cppcomponents::IFuture < std::vector < std::string >>> ();
+
+	//	}
+	//	cppcomponents::Future<Stat_t> Stat(cr_string path){
+	//		auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(r.GetStatBuf());
+	//			}
+	//		};
+
+	//		Fs::StatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
+
+	//	}
+	//	cppcomponents::Future<cppcomponents_libuv::Stat_t> Stat(){
+	//		auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(r.GetStatBuf());
+	//			}
+	//		};
+
+	//		Fs::FstatRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Rename(cr_string path, cr_string new_path){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+	//		};
+
+	//		Fs::RenameRaw(loop_, path, new_path, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Sync(){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+	//		};
+
+	//		Fs::FsyncRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Datasync(){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+	//		};
+
+	//		Fs::FdatasyncRaw(loop_, file_, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Truncate(std::int64_t offset){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::FtruncateRaw(loop_, file_,offset, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Sendfile(FileOsType file_out, FileOsType file_in,
+	//		std::int64_t in_offset, std::size_t length){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::SendfileRaw(loop_, file_out, file_in, in_offset, length, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}	
+	//	cppcomponents::Future<std::intptr_t> Sendfile(FileOsType file_out,	std::int64_t in_offset, std::size_t length){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::SendfileRaw(loop_, file_out, file_, in_offset, length, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Chmod(cr_string path,
+	//		int mode){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::ChmodRaw(loop_, path, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Utime(cr_string path, double atime,
+	//		double mtime){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::UtimeRaw(loop_, path, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::intptr_t> Utime(double atime,	double mtime){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::FutimeRaw(loop_, file_, atime, mtime, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<cppcomponents_libuv::Stat_t> Lstat(cr_string path){
+	//		auto p = cppcomponents::make_promise<cppcomponents_libuv::Stat_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(r.GetStatBuf());
+	//			}
+	//		};
+
+	//		Fs::LstatRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<cppcomponents_libuv::Stat_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Link(cr_string path, cr_string new_path){
+	//		auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				p.Set(n);
+	//			}
+	//		};
+
+	//		Fs::LinkRaw(loop_, path,new_path, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Symlink(cr_string path,
+	//		cr_string new_path, int flags){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::SymlinkRaw(loop_, path, new_path, flags, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+	//	cppcomponents::Future<std::string> Readlink(cr_string path){
+	//		auto p = cppcomponents::make_promise<std::string>();
+
+	//		auto f = [p](cppcomponents::use<IFsRequest> r){
+	//			Cleaner c{ r };
+
+	//			auto n = r.GetResult();
+	//			if (n < 0){
+	//				p.SetError(n);
+	//			}
+	//			else{
+	//				auto pchar = static_cast<const char*>(r.GetPtr());
+	//				p.Set(std::string{ pchar });
+	//			}
+	//		};
+
+	//		Fs::ReadlinkRaw(loop_, path, cppcomponents::make_delegate<FsCallback>(f));
+
+	//		return p.QueryInterface<cppcomponents::IFuture<std::string>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Chmod(int mode){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::FchmodRaw(loop_, file_, mode, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Chown(cr_string path, unsigned char uid,
+	//		unsigned char gid){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::ChownRaw(loop_, path, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//	cppcomponents::Future<std::intptr_t> Chown(unsigned char uid,unsigned char gid){
+	//			auto p = cppcomponents::make_promise<std::intptr_t>();
+
+	//			auto f = [p](cppcomponents::use<IFsRequest> r){
+	//				Cleaner c{ r };
+
+	//				auto n = r.GetResult();
+	//				if (n < 0){
+	//					p.SetError(n);
+	//				}
+	//				else{
+	//					p.Set(n);
+	//				}
+	//			};
+
+	//			Fs::FchownRaw(loop_, file_, uid, gid, cppcomponents::make_delegate<FsCallback>(f));
+
+	//			return p.QueryInterface<cppcomponents::IFuture<std::intptr_t>>();
+
+	//	}
+
+	//};
 
 
 
@@ -2324,6 +3045,12 @@ namespace cppcomponents_libuv{
 		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>);
 
 		CPPCOMPONENTS_CONSTRUCT(IFsPollFactory, Init);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IFsPollFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(){
+				return this->get_interface().Init(Loop::DefaultLoop());
+			}
+		};
 	};
 
 	inline std::string FsPollId(){ return "cppcomponents_libuv_dll!FsPoll"; }
@@ -2361,6 +3088,12 @@ namespace cppcomponents_libuv{
 		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>);
 
 		CPPCOMPONENTS_CONSTRUCT(ISignalFactory, Init);
+		CPPCOMPONENTS_INTERFACE_EXTRAS(ISignalFactory){
+
+			cppcomponents::use<cppcomponents::InterfaceUnknown> TemplatedConstructor(){
+				return this->get_interface().Init(Loop::DefaultLoop());
+			}
+		};
 	}; 
 
 	inline std::string SignalId(){ return "cppcomponents_libuv_dll!Signal"; }
@@ -2389,17 +3122,24 @@ namespace cppcomponents_libuv{
 	{
 
 
-		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>,cr_string filename,
+		use<cppcomponents::InterfaceUnknown> Init(use<ILoop>,cppcomponents::cr_string filename,
 			use<FsEventCallback>, int flags);
 
 		CPPCOMPONENTS_CONSTRUCT(IFsEventFactory, Init);
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(IFsEventFactory){
 			template<class F>
-			use<cppcomponents::InterfaceUnknown> TemplatedConstructor(use<ILoop> loop, cr_string filename,
+			use<cppcomponents::InterfaceUnknown> TemplatedConstructor(use<ILoop> loop, cppcomponents::cr_string filename,
 				F f, int flags){
 					return this->get_interface().Init(loop,filename,cppcomponents::make_delegate<FsEventCallback>(f),flags);
 			}
+			template<class F>
+			use<cppcomponents::InterfaceUnknown> TemplatedConstructor(cppcomponents::cr_string filename,
+				F f, int flags){
+
+					return TemplatedConstructor(Loop::DefaultLoop(), filename, f, flags);
+			}
+
 
 		};
 	}; 
