@@ -1495,7 +1495,7 @@ namespace cppcomponents_libuv{
 				this->get_interface().StartRaw(cppcomponents::make_delegate<TimerCallback>(f), timeout, repeat);
 			}
 
-			cppcomponents::Channel<int> StartAsChannel(){
+			cppcomponents::Channel<int> StartAsChannel(std::uint64_t timeout, std::uint64_t repeat){
 				auto chan = cppcomponents::make_channel<int>();
 
 				auto f = [chan](cppcomponents::use<ITimer>, int status){
@@ -1509,7 +1509,7 @@ namespace cppcomponents_libuv{
 
 				};
 
-				Start(f);
+				Start(f,timeout,repeat);
 
 				return chan;
 
