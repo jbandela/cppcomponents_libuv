@@ -116,8 +116,7 @@ TEST_IMPL(tcp_bind_error_addrnotavail_2) {
 
 
 TEST_IMPL(tcp_bind_error_fault) {
-  char garbage[] =
-      "blah blah blah blah blah blah blah blah blah blah blah blah";
+  char garbage[] = "blah blah blah blah blah blah blah blah blah blah blah blah";
   struct sockaddr_in* garbage_addr;
   uv_tcp_t server;
   int r;

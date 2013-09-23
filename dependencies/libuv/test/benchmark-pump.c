@@ -101,16 +101,11 @@ static void show_stats(uv_timer_t* handle, int status) {
     uv_update_time(loop);
     diff = uv_now(loop) - start_time;
 
-    LOGF("%s_pump%d_client: %.1f gbit/s\n",
-         type == TCP ? "tcp" : "pipe",
-         write_sockets,
-         gbit(nsent_total, diff));
+    LOGF("%s_pump%d_client: %.1f gbit/s\n", type == TCP ? "tcp" : "pipe", write_sockets,
+        gbit(nsent_total, diff));
 
     for (i = 0; i < write_sockets; i++) {
-      if (type == TCP)
-        uv_close((uv_handle_t*) &tcp_write_handles[i], NULL);
-      else
-        uv_close((uv_handle_t*) &pipe_write_handles[i], NULL);
+      uv_close(type == TCP ? (uv_handle_t*)&tcp_write_handles[i] : (uv_handle_t*)&pipe_write_handles[i], NULL);
     }
 
     exit(0);
@@ -128,10 +123,8 @@ static void read_show_stats(void) {
   uv_update_time(loop);
   diff = uv_now(loop) - start_time;
 
-  LOGF("%s_pump%d_server: %.1f gbit/s\n",
-       type == TCP ? "tcp" : "pipe",
-       max_read_sockets,
-       gbit(nrecv_total, diff));
+  LOGF("%s_pump%d_server: %.1f gbit/s\n", type == TCP ? "tcp" : "pipe", max_read_sockets,
+      gbit(nrecv_total, diff));
 }
 
 
@@ -226,10 +219,7 @@ static void connect_cb(uv_connect_t* req, int status) {
 
     /* Yay! start writing */
     for (i = 0; i < write_sockets; i++) {
-      if (type == TCP)
-        do_write((uv_stream_t*) &tcp_write_handles[i]);
-      else
-        do_write((uv_stream_t*) &pipe_write_handles[i]);
+      do_write(type == TCP ? (uv_stream_t*)&tcp_write_handles[i] : (uv_stream_t*)&pipe_write_handles[i]);
     }
   }
 }

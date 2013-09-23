@@ -46,7 +46,6 @@ extern "C" {
 #endif
 
 #include "uv-errno.h"
-#include <stddef.h>
 
 #if defined(_MSC_VER) && _MSC_VER < 1600
 # include "stdint-msvc2008.h"
@@ -54,10 +53,17 @@ extern "C" {
 # include <stdint.h>
 #endif
 
-#if defined(_WIN32)
-# include "uv-win.h"
-#else
+#include <sys/types.h> /* size_t */
+
+#if defined(__SVR4) && !defined(__unix__)
+# define __unix__
+#endif
+
+#if defined(__unix__) || defined(__POSIX__) || \
+    defined(__APPLE__) || defined(_AIX)
 # include "uv-unix.h"
+#else
+# include "uv-win.h"
 #endif
 
 /* Expand this list if necessary. */
@@ -304,7 +310,7 @@ UV_EXTERN void uv_update_time(uv_loop_t*);
  * Don't make assumptions about the starting point, you will only get
  * disappointed.
  *
- * Use uv_hrtime() if you need sub-millisecond granularity.
+ * Use uv_hrtime() if you need sub-milliseond granularity.
  */
 UV_EXTERN uint64_t uv_now(uv_loop_t*);
 
@@ -516,27 +522,8 @@ UV_EXTERN size_t uv_handle_size(uv_handle_type type);
 UV_EXTERN size_t uv_req_size(uv_req_type type);
 
 /*
- * Returns non-zero if the handle is active, zero if it's inactive.
- *
- * What "active" means depends on the type of handle:
- *
- *  - A uv_async_t handle is always active and cannot be deactivated, except
- *    by closing it with uv_close().
- *
- *  - A uv_pipe_t, uv_tcp_t, uv_udp_t, etc. handle - basically any handle that
- *    deals with I/O - is active when it is doing something that involves I/O,
- *    like reading, writing, connecting, accepting new connections, etc.
- *
- *  - A uv_check_t, uv_idle_t, uv_timer_t, etc. handle is active when it has
- *    been started with a call to uv_check_start(), uv_idle_start(), etc.
- *
- *      Rule of thumb: if a handle of type uv_foo_t has a uv_foo_start()
- *      function, then it's active from the moment that function is called.
- *      Likewise, uv_foo_stop() deactivates the handle again.
- *
- *  - A uv_fs_event_t handle is currently always active.  Future versions
- *    of libuv may add uv_fs_event_start() and uv_fs_event_stop() functions.
- *
+ * Returns 1 if the prepare/check/idle/timer handle has been started, 0
+ * otherwise. For other handle types this always returns 1.
  */
 UV_EXTERN int uv_is_active(const uv_handle_t* handle);
 
@@ -782,12 +769,6 @@ UV_EXTERN int uv_tcp_simultaneous_accepts(uv_tcp_t* handle, int enable);
 /*
  * Bind the handle to an address and port.  `addr` should point to an
  * initialized struct sockaddr_in or struct sockaddr_in6.
- *
- * When the port is already taken, you can expect to see an UV_EADDRINUSE
- * error from either uv_tcp_bind(), uv_listen() or uv_tcp_connect().
- *
- * That is, a successful call to uv_tcp_bind() does not guarantee that
- * the call to uv_listen() or uv_tcp_connect() will succeed as well.
  */
 UV_EXTERN int uv_tcp_bind(uv_tcp_t* handle, const struct sockaddr* addr);
 
@@ -1417,7 +1398,7 @@ typedef struct uv_process_options_s {
    * If non-null this represents a directory the subprocess should execute
    * in. Stands for current working directory.
    */
-  const char* cwd;
+  char* cwd;
   /*
    * Various flags that control how uv_spawn() behaves. See the definition of
    * `enum uv_process_flags` below.

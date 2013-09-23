@@ -32,6 +32,15 @@ using cppcomponents::use;
 
 const int TEST_PORT = 7171;
 
+TEST(libuv_version, libuv_version){
+	using namespace cppcomponents_libuv;
+
+	auto s = Uv::VersionString();
+
+	std::cerr << "Libuv version is " << s.to_string() << "\n";
+
+}
+
 
 TEST(async, async){
 	int prepare_cb_called = 0;
