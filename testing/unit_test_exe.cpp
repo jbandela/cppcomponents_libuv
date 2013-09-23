@@ -399,18 +399,20 @@ TEST(fs, fs1){
 }
 
 TEST(udp, udp){
-	luv::Loop loop;
+	using namespace cppcomponents_libuv;
+	
 	std::string result;
 
 
-	luv::UdpStream send_socket{ loop };
-	luv::UdpStream recv_socket{ loop };
+	luv::UdpStream send_socket;
+	luv::UdpStream recv_socket;
 
 	auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+		LoopExiter exiter;
 
 		auto recv_addr = luv::Uv::Ip4Addr("0.0.0.0", 7768);
 		recv_socket.Bind(recv_addr, 0);
-		recv_socket.RecvStart([&](use<luv::IUdpStream> stream, std::intptr_t nread,
+		recv_socket.RecvStart([&](use<IUdpStream> stream, std::intptr_t nread,
 			cppcomponents::use<cppcomponents::IBuffer> buf, luv::SockAddr addr, unsigned int flags){
 				std::string s{ buf.Begin(), buf.End() };
 				EXPECT_EQ(s, "Hello UDP");
@@ -418,10 +420,10 @@ TEST(udp, udp){
 				result = s;
 		});
 
-		send_socket.Bind(luv::Uv::Ip4Addr("0.0.0.0", 0), 0);
+		send_socket.Bind(Uv::Ip4Addr("0.0.0.0", 0), 0);
 		send_socket.SetBroadcast(1);
 
-		auto send_addr = luv::Uv::Ip4Addr("255.255.255.255", 7768);
+		auto send_addr = Uv::Ip4Addr("255.255.255.255", 7768);
 		EXPECT_EQ(0, await.as_future(send_socket.Send(std::string("Hello UDP"), send_addr)).ErrorCode());
 
 
@@ -430,7 +432,7 @@ TEST(udp, udp){
 
 	auto fut = func();
 
-	loop.Run();
+	Uv::DefaultExecutor().Loop();
 	EXPECT_EQ(0, fut.ErrorCode());
 	EXPECT_EQ(result, "Hello UDP");
 
@@ -439,25 +441,33 @@ TEST(udp, udp){
 
 TEST(async2, async2){
 
-	auto executor = luv::Uv::DefaultExecutor();
+	using namespace cppcomponents_libuv;
 
 
-	auto func = cppcomponents::resumable<int>([&](cppcomponents::awaiter<int> await){
 
-		auto f1 = luv::Uv::Async([](){return 7; });
+	auto calculate = cppcomponents::resumable<int>([&](cppcomponents::awaiter<int> await){
 
-		auto f2 = luv::Uv::Async([](){return 3; });
+		auto f1 = Uv::Async([](){return 7; });
+
+		auto f2 = Uv::Async([](){return 3; });
 
 		return await(f1) * await(f2);
 
 
 	});
 
+	auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+		LoopExiter exiter;
 
-	func().Then([&](cppcomponents::Future<int> fut){
-		EXPECT_EQ(21, fut.Get());
-		executor.MakeLoopExit();
+		int value = await(calculate());
+
+		EXPECT_EQ(21, value);
+
+
 	});
-	executor.Loop();
+
+	func();
+
+	Uv::DefaultExecutor().Loop();
 
 }
