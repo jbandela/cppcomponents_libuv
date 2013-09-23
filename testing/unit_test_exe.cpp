@@ -291,6 +291,7 @@ TEST(fs, fs1){
 
 
 	auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+		luv::LoopExiter exiter;
 		auto cwd = luv::Uv::Cwd();
 		
 		using luv::Fs;
@@ -384,7 +385,6 @@ TEST(fs, fs1){
 		iter = std::find(dirfiles.begin(), dirfiles.end(), std::string{ "testdir" });
 		EXPECT_EQ(iter, dirfiles.end());
 
-		luv::Uv::DefaultExecutor().MakeLoopExit();
 	});
 
 	auto fut = func();
