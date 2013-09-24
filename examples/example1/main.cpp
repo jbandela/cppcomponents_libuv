@@ -48,52 +48,6 @@ void handle_input(awaiter<void> await){
 
 }
 
-template<class T>
-Future<T> fork_future(Future<T>& f){
-
-	auto p1 = make_promise<T>();
-	auto p2 = make_promise<T>();
-
-	auto f1 = f;
-	f1.Then([p1, p2](Future<T> f){
-
-		try{
-			p1.Set(f.Get());
-			p2.Set(f.Get());
-		}
-		catch (std::exception& e){
-			p1.SetError(cross_compiler_interface::general_error_mapper::error_code_from_exception(e));
-			p2.SetError(cross_compiler_interface::general_error_mapper::error_code_from_exception(e));
-		}
-	});
-
-	f = p1.QueryInterface<IFuture<T>>();
-	return p2.QueryInterface<IFuture<T>>();
-}
-inline Future<void> fork_future(Future<void>& f){
-
-	auto p1 = make_promise<void>();
-	auto p2 = make_promise<void>();
-
-	auto f1 = f;
-	f1.Then([p1, p2](Future<void> f){
-
-		try{
-			f.Get();
-			p1.Set();
-
-			p2.Set();
-		}
-		catch (std::exception& e){
-			p1.SetError(cross_compiler_interface::general_error_mapper::error_code_from_exception(e));
-			p2.SetError(cross_compiler_interface::general_error_mapper::error_code_from_exception(e));
-		}
-	});
-
-	f = p1.QueryInterface<IFuture<void>>();
-	return p2.QueryInterface<IFuture<void>>();
-}
-
 int uv_main(awaiter<int> await){
 
 	// Exits the default executor when finished
@@ -108,7 +62,7 @@ int uv_main(awaiter<int> await){
 	Timer timer;
 	auto tc = timer.StartAsChannel(5000, 0);
 
-	await(when_any(tc.Read(),fork_future(quit_future)));
+	await(when_any(tc.Read(),quit_future));
 
 	if (quit_future.Ready()){
 		return 0;
@@ -126,6 +80,9 @@ int uv_main(awaiter<int> await){
 	// Connect to the stream
 	TcpStream stream;
 	await(stream.Connect(addr->ai_addr));
+
+	// Free the addr;
+	Uv::Freeaddrinfo(addr);
 
 	std::string request = "GET /about/ HTTP/1.0\r\nHost: www.nodejs.org\r\n\r\n";
 
