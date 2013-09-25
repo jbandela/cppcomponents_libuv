@@ -106,15 +106,21 @@ int uv_main(awaiter<int> await){
 	stream.ReadStop();
 
 	// Output the response
-	await(out.Write(response));
+	auto wf = await.as_future(out.Write(response));
+	if (wf.ErrorCode() < 0){
+		std::stringstream sstream;
+		sstream << "Write future returned " << wf.ErrorCode() << "\n";
 
+		await(err.Write(sstream.str()));
+
+	}
 	// Wait unit we have typed quit
 	await.as_future(quit_future);
 	if (quit_future.ErrorCode() < 0){
 		std::stringstream sstream;
 		sstream << "Quit future returned " << quit_future.ErrorCode() << "\n";
 
-		out.Write(sstream.str());
+		await(err.Write(sstream.str()));
 
 	}
 	
