@@ -1,24 +1,50 @@
-#include <sstream>
-
-// Libuv wrapper
-#include "../../cppcomponents_libuv/cppcomponents_libuv.hpp"
+// libuv wrapper
+#include <cppcomponents_libuv/cppcomponents_libuv.hpp>
 
 // For resumable and awaiter
 #include <cppcomponents_async_coroutine_wrapper/cppcomponents_resumable_await.hpp>
 
 
-using namespace cppcomponents_libuv;
-using namespace cppcomponents;
+// use<Interface> wraps a cppcomponents interface for use
+// (the reason this is needed is that you can also implement_interface<Interface> when implementing an interface
+using cppcomponents::use;
+
+// Future<T> is just a template alias for use<IFuture<T>>
+using cppcomponents::Future;
+
+// Awaiter operator() uses boost::coroutine to emulate await on Future
+using cppcomponents::awaiter;
+
+// Resumable wraps a function taking awaiter into a function that returns Future
+using cppcomponents::resumable;
+
+// libuv types, Interfaces start with I
+// Classes do not start with I and provide implementation of interfaces
+using cppcomponents_libuv::ITty;
+using cppcomponents_libuv::Tty;
+using cppcomponents_libuv::TcpStream;
+using cppcomponents_libuv::Timer;
+
+// The general purpose libuv global methods are static methods under Uv
+using cppcomponents_libuv::Uv;
+
+// Use RAII to guarantee call to Uv::DefaultExecutor().MakeLoopExit();
+using cppcomponents_libuv::LoopExiter;
+
+using cppcomponents_libuv::ErrorCodes;
 
 
 void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> await){
+	// Write out the prompt
 	await(out.Write("Type Quit and press return to quit, any other text to have it echoed\n"));
 
+
+	// Start reading and get it as a channel
 	auto chan = in.ReadStartWithChannel();
 
+	// Loop until we break
 	while (true){
-
-
+		// Read the channel and if we have Quit, the break otherwise echo
 		auto buf = await(chan.Read());
 		std::string s(buf.Begin(),buf.End());
 		if (s.substr(0,4) == "Quit"){
@@ -29,30 +55,32 @@ void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> awai
 		}
 
 	}
-
+	// Stop reading
 	in.ReadStop();
 
 }
 
-int uv_main(awaiter<int> await){
+void uv_main(awaiter<void> await){
 
+	// Tty correspoding to stdin, stdout, stderr
 	Tty in{ 0, true };
 	Tty out{ 1, false };
-	Tty err{ 1, false };
+	Tty err{ 2, false };
 
 	// Dispatch our input handler
 	auto quit_future = resumable<void>(handle_input)(in,out,err);
 
-	//
+	// A Timer demo
 	await(out.Write("Waiting 5 seconds before getting the url\n"));
 
 	Timer timer;
 	auto tc = timer.StartAsChannel(5000, 0);
 
+	// You can type Quit to exit even if we are waiting for a timer
 	await(when_any(tc.Read(),quit_future));
 
 	if (quit_future.Ready()){
-		return 0;
+		return;
 	}
 
 	// Look up the address asynchronously
@@ -61,19 +89,20 @@ int uv_main(awaiter<int> await){
 	// If we cannot find address
 	if (addr == nullptr){
 		await(err.Write("Address not found"));
-		return -1;
+		// Throw addrnotavailable as errorcode
+		return cppcomponents::throw_if_error(static_cast<int>(ErrorCodes::Addrnotavail));
 	}
 
 	// Connect to the stream
 	TcpStream stream;
 	await(stream.Connect(addr->ai_addr));
 
-	// Free the addr;
+	// Free the addr now that we no longer need it
 	Uv::Freeaddrinfo(addr);
 
+	// Send http get request to www.nodejs.org/about/
 	std::string request = "GET /about/ HTTP/1.0\r\nHost: www.nodejs.org\r\n\r\n";
 
-	// Write the request
 	await(stream.Write(request));
 
 
@@ -82,10 +111,9 @@ int uv_main(awaiter<int> await){
 
 	std::string response;
 
-	bool more = true;
 	while (true){
 
-		// as_future allows us to get back a future that we can check the error code one
+		// as_future allows us to get back a future that we can check the error code instead of throwing exception 
 		auto fut = await.as_future(chan.Read());
 		if (fut.ErrorCode() != 0){
 			break;
@@ -103,34 +131,21 @@ int uv_main(awaiter<int> await){
 	stream.ReadStop();
 
 	// Output the response
-	auto wf = await.as_future(out.Write(response));
-	if (wf.ErrorCode() < 0){
-		std::stringstream sstream;
-		sstream << "Write future returned " << wf.ErrorCode() << "\n";
+	await(out.Write(response));
 
-		await(err.Write(sstream.str()));
-
-	}
 	// Wait unit we have typed quit
-	await.as_future(quit_future);
-	if (quit_future.ErrorCode() < 0){
-		std::stringstream sstream;
-		sstream << "Quit future returned " << quit_future.ErrorCode() << "\n";
+	await(quit_future);
 
-		await(err.Write(sstream.str()));
-
-	}
-	
-
-	// Return 0
-	return 0;
 }
 
 #include <iostream>
 int main(){
 
-	resumable<int>(uv_main)().Then([](Future<int> f){
+	resumable<void>(uv_main)().Then([](Future<void> f){
+		// Exit loop at end of scope
 		LoopExiter exiter;
+		
+		//Output any errors
 		if (f.ErrorCode()){
 			std::cerr << "Error in uv_main " << f.ErrorCode() << "\n";
 		}
@@ -138,8 +153,5 @@ int main(){
 	});
 
 	Uv::DefaultExecutor().Loop();
-
-
-
 
 }

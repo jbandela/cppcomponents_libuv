@@ -159,7 +159,7 @@ TEST(connection_fail, connection_fail){
 
 	auto on_connect_with_close = [&](cppcomponents::Future<int> fut) {
 		auto status = fut.ErrorCode();
-		EXPECT_EQ(status, luv::ErrorCodes::Connrefused);
+		EXPECT_EQ(status, static_cast<int>(luv::ErrorCodes::Connrefused));
 		connect_cb_calls++;
 
 		EXPECT_EQ(close_cb_calls, 0);
@@ -168,7 +168,7 @@ TEST(connection_fail, connection_fail){
 
 	auto on_connect_without_close = [&](cppcomponents::Future<int> fut){
 		auto status = fut.ErrorCode();
-		EXPECT_EQ(status, luv::ErrorCodes::Connrefused);
+		EXPECT_EQ(status, static_cast<int>(luv::ErrorCodes::Connrefused));
 		connect_cb_calls++;
 		timer.Start(timer_cb, 100, 0);
 		EXPECT_EQ(close_cb_calls, 0);
