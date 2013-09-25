@@ -39,6 +39,7 @@ using cppcomponents_libuv::ITty;
 using cppcomponents_libuv::Tty;
 using cppcomponents_libuv::TcpStream;
 using cppcomponents_libuv::Timer;
+using cppcomponents_libuv::IUvStream;
 
 // The general purpose libuv global methods are static methods under Uv
 using cppcomponents_libuv::Uv;
@@ -163,28 +164,57 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 
 }
 
-void tcp_echo_server(int port, Channel<int> stopchan, awaiter<void> await){
+void tcp_echo_server(int port, Channel<int> stopchan,use<ITty> out, awaiter<void> await){
 
 	auto stopfut = stopchan.Read();
 	TcpStream server;
 
-	auto server_addr = Uv::Ip4Addr("127.0.0.1", port);
+	auto server_addr = Uv::Ip4Addr("0.0.0.0", port);
 
 	server.Bind(server_addr);
+	server.Listen(1, cppcomponents::resumable<void>([&](use<IUvStream> stream, int, cppcomponents::awaiter<void> await){
 
+
+		TcpStream client;
+		stream.Accept(client);
+		auto readchan = client.ReadStartWithChannel();
+
+		int k = 0;
+		while (true){
+			auto fut = await.as_future(readchan.Read());
+			if (fut.ErrorCode()){
+				break;
+			}
+			auto buf = fut.Get();
+			std::string s{ buf.Begin(), buf.End() };
+			std::stringstream strstream;
+			strstream << "Hi " << k++;
+			std::string response =
+				"HTTP/1.1 200 OK\r\n"
+				"Date: Fri, 31 Dec 1999 23:59:59 GMT\r\n"
+				"Content-Type: text/plain\r\n"
+				"Content-Length: 42\r\n"
+				"\r\n"
+				"abcdefghijklmnopqrstuvwxyz1234567890abcdef\r\n\r\n";
+			await(client.Write(response));
+		}
+	}));
+	await(stopfut);
+	return;
 	auto chan = server.ListenWithChannel(1);
 
 	while (!stopfut.Ready()){
 		auto listenfut = chan.Read();
-		await(when_any(listenfut, stopfut));
-		if (stopfut.Ready()){
-			break;
-		}
-		auto serverstream = listenfut.Get();
-		TcpStream client;
-		serverstream.Accept(client);
+		//await(when_any(listenfut, stopfut));
+		//if (stopfut.Ready()){
+		//	break;
+		//}
+		auto serverstream = await(listenfut);
+
 		
-		auto clientfunc = resumable<void>([client, stopfut](awaiter<void> await)mutable{
+		auto clientfunc = resumable<void>([serverstream, stopfut,out](awaiter<void> await)mutable{
+			TcpStream client;
+			serverstream.Accept(client);
 			auto readchan = client.ReadStartWithChannel();
 			while (!stopfut.Ready()){
 				auto readfut = readchan.Read();
@@ -196,11 +226,20 @@ void tcp_echo_server(int port, Channel<int> stopchan, awaiter<void> await){
 					break;
 				}
 				auto buf = readfut.Get();
-				client.Write(buf.Begin(), buf.Size());
+
+				await(out.Write(buf.Begin(), buf.Size()));
 				
 			}
+			std::string response = 
+				R"(HTTP/1.1 200 OK
+ Date: Fri, 31 Dec 1999 23:59:59 GMT
+ Content-Type: text/plain
+ Content-Length: 42
+ 
+ abcdefghijklmnopqrstuvwxyz1234567890abcdef
+ )";
+			await(client.Write(response));
 			client.ReadStop();
-
 		});
 
 		Uv::DefaultExecutor().Add(clientfunc);
@@ -301,7 +340,7 @@ void uv_main( awaiter<void> await){
 			}
 			else{
 				auto stopchan = make_channel<int>();
-				Uv::DefaultExecutor().Add(std::bind(resumable<void>(tcp_echo_server), port, stopchan));
+				Uv::DefaultExecutor().Add(std::bind(resumable<void>(tcp_echo_server), port, stopchan,out));
 			}
 
 
