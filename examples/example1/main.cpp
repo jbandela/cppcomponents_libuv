@@ -111,10 +111,10 @@ void timer(use<ITty> out, std::uint64_t time, awaiter<void> await){
 }
 
 
-std::string get_resource(const std::string& server, const std::string& resource, awaiter<std::string> await){
+std::string get_resource(const std::string& server,const std::string& port, const std::string& resource, awaiter<std::string> await){
 
 	// Look up the address asynchronously
-	auto addr = await(Uv::Getaddrinfo(std::string("www.nodejs.org"), "http", nullptr));
+	auto addr = await(Uv::Getaddrinfo(server, port, nullptr));
 
 	// If we cannot find address
 	if (addr == nullptr){
@@ -163,6 +163,53 @@ std::string get_resource(const std::string& server, const std::string& resource,
 
 }
 
+void tcp_echo_server(int port, Channel<int> stopchan, awaiter<void> await){
+
+	auto stopfut = stopchan.Read();
+	TcpStream server;
+
+	auto server_addr = Uv::Ip4Addr("127.0.0.1", port);
+
+	server.Bind(server_addr);
+
+	auto chan = server.ListenWithChannel(1);
+
+	while (!stopfut.Ready()){
+		auto listenfut = chan.Read();
+		await(when_any(listenfut, stopfut));
+		if (stopfut.Ready()){
+			break;
+		}
+		auto serverstream = listenfut.Get();
+		TcpStream client;
+		serverstream.Accept(client);
+		
+		auto clientfunc = resumable<void>([client, stopfut](awaiter<void> await)mutable{
+			auto readchan = client.ReadStartWithChannel();
+			while (!stopfut.Ready()){
+				auto readfut = readchan.Read();
+				await(when_any(readfut, stopfut));
+				if (stopfut.Ready()){
+					break;
+				}
+				if (readfut.ErrorCode()){
+					break;
+				}
+				auto buf = readfut.Get();
+				client.Write(buf.Begin(), buf.Size());
+				
+			}
+			client.ReadStop();
+
+		});
+
+		Uv::DefaultExecutor().Add(clientfunc);
+
+
+	}
+
+
+}
 
 void uv_main( awaiter<void> await){
 	// Tty correspoding to stdin, stdout, stderr
@@ -227,16 +274,37 @@ void uv_main( awaiter<void> await){
 			}
 		}
 		else if (s.substr(0, 3) == "Get"){
-			std::string dummy, server, resource;
+			std::string dummy, server, port, resource;
 			std::stringstream istr{ s };
-			istr >> dummy >> server >> resource;
-			if (server.empty() || resource.empty()){
-				await(out.Write("Please enter a valid server and resource"));
+			istr >> dummy >> server >> port >> resource;
+			if (server.empty() || port.empty() || resource.empty()){
+				await(out.Write("Please enter a valid server, service and resource"));
 			}
-			resumable<std::string>(get_resource)(server, resource).Then(Uv::DefaultExecutor(), [out](Future<std::string> f)mutable{
+			resumable<std::string>(get_resource)(server,port, resource).Then(Uv::DefaultExecutor(), [out,server,port,resource](Future<std::string> f)mutable{
+				auto ec = f.ErrorCode();
+				if (ec < 0){
+					std::stringstream s;
+					s << "Get encountered error number " << ec << "While getting " << server << " " << port << " " << resource << "\n";
+					out.Write(s.str());
+				}
 				out.Write(f.Get());
 
 			});
+		}
+		else if (s.substr(0, 9) == "EchoStart"){
+			std::stringstream istr{ s };
+			std::string dummy;
+			int port = 0;
+			istr >> dummy >> port;
+			if (port == 0){
+				await(out.Write("Please enter a valid port\n"));
+			}
+			else{
+				auto stopchan = make_channel<int>();
+				Uv::DefaultExecutor().Add(std::bind(resumable<void>(tcp_echo_server), port, stopchan));
+			}
+
+
 		}
 		else{
 			await(out.Write("You typed " + s));
