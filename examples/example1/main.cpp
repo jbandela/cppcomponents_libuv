@@ -25,7 +25,13 @@ using cppcomponents::awaiter;
 using cppcomponents::resumable;
 
 // Like a Go channel (a little bit)
+// A template alias for Channel<T> = use<IChannel<T>>
 using cppcomponents::Channel;
+
+// Create a channel
+using cppcomponents::make_channel;
+
+//
 
 // libuv types, Interfaces start with I
 // Classes do not start with I and provide implementation of interfaces
@@ -91,15 +97,90 @@ void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t
 	
 
 }
-void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> await){
+
+void timer(use<ITty> out, std::uint64_t time, awaiter<void> await){
+
+
+	Timer timer;
+	auto chan = timer.StartAsChannel(time, 0);
+	await(chan.Read());
+	timer.Stop();
+	std::stringstream s;
+	s << "Finished waiting " << (double)(time) / 1000.0 << "seconds \n";
+	out.Write(s.str());
+}
+
+
+std::string get_resource(const std::string& server, const std::string& resource, awaiter<std::string> await){
+
+	// Look up the address asynchronously
+	auto addr = await(Uv::Getaddrinfo(std::string("www.nodejs.org"), "http", nullptr));
+
+	// If we cannot find address
+	if (addr == nullptr){
+		return "ERROR: Address not found\n";
+	}
+
+	// Connect to the stream
+	TcpStream stream;
+	await(stream.Connect(addr->ai_addr));
+
+	// Free the addr now that we no longer need it
+	Uv::Freeaddrinfo(addr);
+
+	// Send http get request to www.nodejs.org/about/
+	std::string request = "GET " + resource + " HTTP/1.0\r\nHost: " + server + "\r\n\r\n";
+
+	await(stream.Write(request));
+
+
+	// We get a channel instead of using a callback for reading
+	auto chan = stream.ReadStartWithChannel();
+
+	std::string response;
+
+	while (true){
+
+		// as_future allows us to get back a future that we can check the error code instead of throwing exception 
+		auto fut = await.as_future(chan.Read());
+		if (fut.ErrorCode() != 0){
+			break;
+		}
+
+		// .Get gives us the results of the future
+		auto buf = fut.Get();
+
+		// Add what we read to our response
+		response.append(buf.Begin(), buf.End());
+
+	}
+
+	// We are done reading so stop
+	stream.ReadStop();
+
+	return response;
+
+
+}
+
+
+void uv_main( awaiter<void> await){
+	// Tty correspoding to stdin, stdout, stderr
+	Tty in{ 0, true };
+	Tty out{ 1, false };
+	Tty err{ 2, false };
+
 	// Write out the prompt
-	await(out.Write("Type Quit and press return to quit,Fib to get the latest calculated fibonacci number, any other text to have it echoed\n"));
+	await(out.Write("Type Quit and press return to quit,\nFib to get the latest calculated fibonacci number,"
+		"\nTimer <milliseconds> to wait milliseconds,"
+		",Get <server> <resource> to get an http resource,"
+		"\n any other text to have it echoed\n"));
 
 	// Start the fibonacci writer
 
-	// First make a channel to communicate with the fibonacci calculating function
-	auto fibchan = cppcomponents::make_channel < std::pair<std::uint16_t, std::uint64_t> >();
-	auto stopchan = cppcomponents::make_channel<int>();
+	// First make a channels to communicate with the fibonacci calculating function
+	auto fibchan = make_channel < std::pair<std::uint16_t, std::uint64_t> >();
+	auto stopchan = make_channel<int>();
 	// 93 is the largest fibonacci number that will fit in 64bits
 	const std::uint16_t fibonacci_n = 93;
 
@@ -133,6 +214,30 @@ void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> awai
 			s << "Fib(" << n << ") = " << value << "\n";
 			await(out.Write(s.str()));
 		}
+		else if (s.substr(0, 5) == "Timer"){
+
+			std::stringstream istr{ s };
+			std::string dummy;
+			std::uint64_t time{};
+			istr >> dummy >> time;
+			if (time == 0){
+				await(out.Write("Please use a valid time in milliseconds that is greater than 0\n"));
+			}else{
+				Uv::DefaultExecutor().Add(std::bind(resumable<void>(timer), out, time));
+			}
+		}
+		else if (s.substr(0, 3) == "Get"){
+			std::string dummy, server, resource;
+			std::stringstream istr{ s };
+			istr >> dummy >> server >> resource;
+			if (server.empty() || resource.empty()){
+				await(out.Write("Please enter a valid server and resource"));
+			}
+			resumable<std::string>(get_resource)(server, resource).Then(Uv::DefaultExecutor(), [out](Future<std::string> f)mutable{
+				out.Write(f.Get());
+
+			});
+		}
 		else{
 			await(out.Write("You typed " + s));
 		}
@@ -143,83 +248,6 @@ void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> awai
 
 }
 
-void uv_main(awaiter<void> await){
-
-	// Tty correspoding to stdin, stdout, stderr
-	Tty in{ 0, true };
-	Tty out{ 1, false };
-	Tty err{ 2, false };
-
-	// Dispatch our input handler
-	auto quit_future = resumable<void>(handle_input)(in,out,err);
-
-	// A Timer demo
-	await(out.Write("Waiting 5 seconds before getting the url\n"));
-
-	Timer timer;
-	auto tc = timer.StartAsChannel(5000, 0);
-
-	// You can type Quit to exit even if we are waiting for a timer
-	await(when_any(tc.Read(),quit_future));
-
-	if (quit_future.Ready()){
-		return;
-	}
-
-	// Look up the address asynchronously
-	auto addr = await(Uv::Getaddrinfo(std::string("www.nodejs.org"), "http", nullptr));
-
-	// If we cannot find address
-	if (addr == nullptr){
-		await(err.Write("Address not found"));
-		// Throw addrnotavailable as errorcode
-		return cppcomponents::throw_if_error(static_cast<int>(ErrorCodes::Addrnotavail));
-	}
-
-	// Connect to the stream
-	TcpStream stream;
-	await(stream.Connect(addr->ai_addr));
-
-	// Free the addr now that we no longer need it
-	Uv::Freeaddrinfo(addr);
-
-	// Send http get request to www.nodejs.org/about/
-	std::string request = "GET /about/ HTTP/1.0\r\nHost: www.nodejs.org\r\n\r\n";
-
-	await(stream.Write(request));
-
-
-	// We get a channel instead of using a callback for reading
-	auto chan = stream.ReadStartWithChannel();
-
-	std::string response;
-
-	while (true){
-
-		// as_future allows us to get back a future that we can check the error code instead of throwing exception 
-		auto fut = await.as_future(chan.Read());
-		if (fut.ErrorCode() != 0){
-			break;
-		}
-
-		// .Get gives us the results of the future
-		auto buf = fut.Get();
-
-		// Add what we read to our response
-		response.append(buf.Begin(), buf.End());
-
-	}
-
-	// We are done reading so stop
-	stream.ReadStop();
-
-	// Output the response
-	await(out.Write(response));
-
-	// Wait unit we have typed quit
-	await(quit_future);
-
-}
 
 #include <iostream>
 int main(){
