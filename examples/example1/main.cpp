@@ -1,3 +1,4 @@
+#include <sstream>
 
 // Libuv wrapper
 #include "../../cppcomponents_libuv/cppcomponents_libuv.hpp"
@@ -108,7 +109,15 @@ int uv_main(awaiter<int> await){
 	await(out.Write(response));
 
 	// Wait unit we have typed quit
-	await(quit_future);
+	await.as_future(quit_future);
+	if (quit_future.ErrorCode() < 0){
+		std::stringstream sstream;
+		sstream << "Quit future returned " << quit_future.ErrorCode() << "\n";
+
+		out.Write(sstream.str());
+
+	}
+	
 
 	// Return 0
 	return 0;
