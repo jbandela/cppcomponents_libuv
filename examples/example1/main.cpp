@@ -43,10 +43,12 @@ using cppcomponents_libuv::LoopExiter;
 using cppcomponents_libuv::ErrorCodes;
 
 
-void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t> > chan){
+void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t> > chan, Channel<int> stopchan){
 	// First fibonacci is 0
 	// So go ahead and write that as our first value
 	auto fut = chan.Write({ 0, 0 });
+
+	auto stopfut = stopchan.Read();
 
 	// A vector to hold our intermediate calculations
 	std::vector<std::uint64_t> fibs(n+1);
@@ -72,10 +74,14 @@ void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t
 		// fut (the Future from chan.Write, will become ready when somebody reads the channel
 		// that is a trigger that we need to write the latest value to the channel
 		// Also, if we are done calculating (i==n) we write the value to the channel
-		if (fut.Ready() || i==n){
+		if (fut.Ready() || i==n || stopfut.Ready()){
 			fut = chan.Write({ i, fibs[i] });
+			if (stopfut.Ready()){
+				return;
+			}
 		}
-
+		
+		
 		// Slow us down so it looks like a long calculation, otherwise it runs too fast
 		std::this_thread::sleep_for(std::chrono::milliseconds(500));
 	}
@@ -91,12 +97,12 @@ void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> awai
 
 	// First make a channel to communicate with the fibonacci calculating function
 	auto fibchan = cppcomponents::make_channel < std::pair<std::uint16_t, std::uint64_t> >();
-
+	auto stopchan = cppcomponents::make_channel<int>();
 	// 93 is the largest fibonacci number that will fit in 64bits
 	const std::uint16_t fibonacci_n = 93;
 
 	// Uv::Async will run the function on the libuv threadpool
-	Uv::Async(std::bind(fibonacci, fibonacci_n, fibchan));
+	Uv::Async(std::bind(fibonacci, fibonacci_n, fibchan,stopchan));
 
 	// Start reading and get it as a channel
 	auto chan = in.ReadStartWithChannel();
@@ -111,6 +117,7 @@ void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> awai
 		auto buf = await(chan.Read());
 		std::string s(buf.Begin(),buf.End());
 		if (s.substr(0, 4) == "Quit"){
+			stopchan.Write(1);
 			break;
 		}
 		else if (s.substr(0, 3) == "Fib"){
