@@ -143,7 +143,14 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 	while (true){
 
 		// as_future allows us to get back a future that we can check the error code instead of throwing exception 
-		auto fut = await.as_future(chan.Read());
+		// put a timeout of 2 seconds on the read
+		Timer timer;
+		auto timerfut = timer.StartAsChannel(2000, 0).Read();
+		auto fut = chan.Read();
+		await(when_any(timerfut, fut));
+		if (timerfut.Ready()){
+			break;
+		}	
 		if (fut.ErrorCode() != 0){
 			break;
 		}
@@ -181,7 +188,11 @@ void tcp_echo_server(int port, Channel<int> stopchan,use<ITty> out, awaiter<void
 
 		int k = 0;
 		while (true){
-			auto fut = await.as_future(readchan.Read());
+			auto fut = readchan.Read();
+			await(when_any(fut, stopfut));
+			if (stopfut.Ready()){
+				break;
+			}
 			if (fut.ErrorCode()){
 				break;
 			}
@@ -201,52 +212,6 @@ void tcp_echo_server(int port, Channel<int> stopchan,use<ITty> out, awaiter<void
 	}));
 	await(stopfut);
 	return;
-	auto chan = server.ListenWithChannel(1);
-
-	while (!stopfut.Ready()){
-		auto listenfut = chan.Read();
-		//await(when_any(listenfut, stopfut));
-		//if (stopfut.Ready()){
-		//	break;
-		//}
-		auto serverstream = await(listenfut);
-
-		
-		auto clientfunc = resumable<void>([serverstream, stopfut,out](awaiter<void> await)mutable{
-			TcpStream client;
-			serverstream.Accept(client);
-			auto readchan = client.ReadStartWithChannel();
-			while (!stopfut.Ready()){
-				auto readfut = readchan.Read();
-				await(when_any(readfut, stopfut));
-				if (stopfut.Ready()){
-					break;
-				}
-				if (readfut.ErrorCode()){
-					break;
-				}
-				auto buf = readfut.Get();
-
-				await(out.Write(buf.Begin(), buf.Size()));
-				
-			}
-			std::string response = 
-				R"(HTTP/1.1 200 OK
- Date: Fri, 31 Dec 1999 23:59:59 GMT
- Content-Type: text/plain
- Content-Length: 42
- 
- abcdefghijklmnopqrstuvwxyz1234567890abcdef
- )";
-			await(client.Write(response));
-			client.ReadStop();
-		});
-
-		Uv::DefaultExecutor().Add(clientfunc);
-
-
-	}
-
 
 }
 
