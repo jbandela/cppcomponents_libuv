@@ -18,6 +18,10 @@ namespace{
 
 #endif
 
+#ifndef _WIN32
+#include <netdb.h>
+#endif
+
 
 // Libuv wrapper
 #include "../../cppcomponents_libuv/cppcomponents_libuv.hpp"
@@ -47,7 +51,7 @@ void handle_input(awaiter<void> await){
 			break;
 		}
 		else{
-			out.Write("You typed " + s);
+			await(out.Write("You typed " + s));
 		}
 
 	}
