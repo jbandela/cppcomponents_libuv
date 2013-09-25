@@ -4,6 +4,7 @@
 #include <crtdbg.h>
 #include <iostream>
 #include <sstream>
+#include<stdio.h>
 namespace{
 	struct MemLeakCheckInit{
 		MemLeakCheckInit(){
@@ -31,20 +32,27 @@ using namespace cppcomponents;
 
 
 void handle_input(awaiter<void> await){
-	std::cerr << "Type Quit and press return to quit, any other text to have it echoed\n";
-	while (true){
-		std::vector<char> vec(1024);
+	Tty in{ 0, true };
+	Tty out{ 1, false };
+	await(out.Write("Type Quit and press return to quit, any other text to have it echoed\n"));
 
-		auto sz = await(Fs::Read(0, &vec[0], vec.size(), 0));
-		std::string s(vec.begin(), vec.begin() + sz);
+	auto chan = in.ReadStartWithChannel();
+
+	while (true){
+
+
+		auto buf = await(chan.Read());
+		std::string s(buf.Begin(),buf.End());
 		if (s.substr(0,4) == "Quit"){
 			break;
 		}
 		else{
-			std::cerr << "You typed " << s;
+			out.Write("You typed " + s);
 		}
 
 	}
+
+	in.ReadStop();
 
 }
 
