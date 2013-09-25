@@ -27,6 +27,7 @@
 */
 
 #include <netinet/in.h>
+#include <netdb.h>
 
 #define CPPCOMPONENTS_LIBUV_ONCE_INIT PTHREAD_ONCE_INIT
 

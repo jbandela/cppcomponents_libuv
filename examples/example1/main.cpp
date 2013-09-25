@@ -1,27 +1,3 @@
-#ifdef _MSC_VER
-#define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
-#include <crtdbg.h>
-#include <iostream>
-#include <sstream>
-#include<stdio.h>
-namespace{
-	struct MemLeakCheckInit{
-		MemLeakCheckInit(){
-			_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-			//_crtBreakAlloc = 579;
-		}
-	};
-
-	MemLeakCheckInit mlcinit;
-}
-
-#endif
-
-#ifndef _WIN32
-#include <netdb.h>
-#endif
-
 
 // Libuv wrapper
 #include "../../cppcomponents_libuv/cppcomponents_libuv.hpp"
@@ -29,15 +5,12 @@ namespace{
 // For resumable and awaiter
 #include <cppcomponents_async_coroutine_wrapper/cppcomponents_resumable_await.hpp>
 
-#include <iostream>
 
 using namespace cppcomponents_libuv;
 using namespace cppcomponents;
 
 
-void handle_input(awaiter<void> await){
-	Tty in{ 0, true };
-	Tty out{ 1, false };
+void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> await){
 	await(out.Write("Type Quit and press return to quit, any other text to have it echoed\n"));
 
 	auto chan = in.ReadStartWithChannel();
@@ -65,11 +38,15 @@ int uv_main(awaiter<int> await){
 	// Exits the default executor when finished
 	LoopExiter exiter;
 
+	Tty in{ 0, true };
+	Tty out{ 1, false };
+	Tty err{ 1, false };
+
 	// Dispatch our input handler
-	auto quit_future = resumable<void>(handle_input)();
+	auto quit_future = resumable<void>(handle_input)(in,out,err);
 
 	//
-	std::cerr << "Waiting 5 seconds before getting the url\n";
+	await(out.Write("Waiting 5 seconds before getting the url\n"));
 
 	Timer timer;
 	auto tc = timer.StartAsChannel(5000, 0);
@@ -85,7 +62,7 @@ int uv_main(awaiter<int> await){
 
 	// If we cannot find address
 	if (addr == nullptr){
-		std::cerr << "Address not found";
+		await(err.Write("Address not found"));
 		return -1;
 	}
 
@@ -128,7 +105,7 @@ int uv_main(awaiter<int> await){
 	stream.ReadStop();
 
 	// Output the response
-	std::cout << response;
+	await(out.Write(response));
 
 	// Wait unit we have typed quit
 	await(quit_future);
