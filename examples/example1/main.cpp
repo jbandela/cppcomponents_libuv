@@ -36,9 +36,6 @@ void handle_input(use<ITty> in, use<ITty> out, use<ITty> err, awaiter<void> awai
 
 int uv_main(awaiter<int> await){
 
-	// Exits the default executor when finished
-	LoopExiter exiter;
-
 	Tty in{ 0, true };
 	Tty out{ 1, false };
 	Tty err{ 1, false };
@@ -129,10 +126,16 @@ int uv_main(awaiter<int> await){
 	return 0;
 }
 
-
+#include <iostream>
 int main(){
 
-	resumable<int>(uv_main)();
+	resumable<int>(uv_main)().Then([](Future<int> f){
+		LoopExiter exiter;
+		if (f.ErrorCode()){
+			std::cerr << "Error in uv_main " << f.ErrorCode() << "\n";
+		}
+
+	});
 
 	Uv::DefaultExecutor().Loop();
 
