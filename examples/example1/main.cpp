@@ -76,6 +76,8 @@ void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t
 		// Also, if we are done calculating (i==n) we write the value to the channel
 		if (fut.Ready() || i==n || stopfut.Ready()){
 			fut = chan.Write({ i, fibs[i] });
+
+			// Check if we were called to stop
 			if (stopfut.Ready()){
 				return;
 			}
@@ -233,6 +235,7 @@ int main(){
 
 	});
 
+	// Run the executor loop
 	Uv::DefaultExecutor().Loop();
 
 }
