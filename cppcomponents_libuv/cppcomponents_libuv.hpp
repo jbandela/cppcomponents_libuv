@@ -929,7 +929,7 @@ namespace cppcomponents_libuv{
 
 			cppcomponents::use<cppcomponents::IFuture<int>> Write(const std::vector<Buffer>& bufs){
 
-				return Write(const_cast<char*>(&bufs.at(0)), bufs.size());
+				return Write(const_cast<Buffer*>(&bufs.at(0)), bufs.size());
 			}
 
 
@@ -1135,7 +1135,7 @@ namespace cppcomponents_libuv{
 
 			cppcomponents::use<cppcomponents::IFuture<int>> Send(const std::vector<Buffer>& bufs, SockAddrRef addr){
 
-				return Send(const_cast<char*>(&bufs.at(0)), bufs.size(),addr);
+				return Send(const_cast<Buffer*>(&bufs.at(0)), bufs.size(),addr);
 			}
 
 
