@@ -175,38 +175,42 @@ void tcp_echo_server(int port, Channel<int> stopchan,use<ITty> out, awaiter<void
 	auto server_addr = Uv::Ip4Addr("0.0.0.0", port);
 
 	server.Bind(server_addr);
-	server.Listen(1, cppcomponents::resumable<void>([&](use<IUvStream> stream, int, cppcomponents::awaiter<void> await){
 
-
-		TcpStream client;
-		stream.Accept(client);
-		auto readchan = client.ReadStartWithChannel();
-
-		int k = 0;
-		while (true){
-			auto fut = readchan.Read();
-			await(when_any(fut, stopfut));
-			if (stopfut.Ready()){
-				break;
-			}
-			if (fut.ErrorCode()){
-				break;
-			}
-			auto buf = fut.Get();
-			std::string s{ buf.Begin(), buf.End() };
-			std::stringstream strstream;
-			strstream << "Hi " << k++;
-			std::string response =
-				"HTTP/1.1 200 OK\r\n"
-				"Date: Fri, 31 Dec 1999 23:59:59 GMT\r\n"
-				"Content-Type: text/plain\r\n"
-				"Content-Length: 42\r\n"
-				"\r\n"
-				"abcdefghijklmnopqrstuvwxyz1234567890abcdef\r\n\r\n";
-			await(client.Write(response));
+	auto listenchan = server.ListenWithChannel(1);
+	while (!stopfut.Ready()){
+		auto listenfut = listenchan.Read();
+		await(when_any(listenfut, stopfut));
+		if (stopfut.Ready()){
+			break;
 		}
-	}));
-	await(stopfut);
+		auto clientfunc = [](use<IUvStream> stream, awaiter<void> await){
+			TcpStream client;
+			stream.Accept(client);
+			auto readchan = client.ReadStartWithChannel();
+
+			int k = 0;
+			while (true){
+				auto buf = await(readchan.Read());
+
+				std::string s{ buf.Begin(), buf.End() };
+				std::stringstream strstream;
+				strstream << "Hi " << k++;
+				std::string response =
+					"HTTP/1.1 200 OK\r\n"
+					"Content-Type: text/plain\r\n"
+					"Content-Length: 42\r\n"
+					"\r\n"
+					"abcdefghijklmnopqrstuvwxyz1234567890abcdef\r\n\r\n";
+
+				await(client.Write(response));
+
+			}
+		};
+
+		Uv::DefaultExecutor().Add(std::bind(resumable<void>(clientfunc), await(listenfut)));
+
+	}
+
 	return;
 
 }
