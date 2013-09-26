@@ -170,7 +170,7 @@ TEST(connection_fail, connection_fail){
 		auto status = fut.ErrorCode();
 		EXPECT_EQ(status, static_cast<int>(luv::ErrorCodes::Connrefused));
 		connect_cb_calls++;
-		timer.Start(timer_cb, 100, 0);
+		timer.Start(timer_cb, std::chrono::milliseconds{ 100 }, std::chrono::milliseconds{ 0 });
 		EXPECT_EQ(close_cb_calls, 0);
 	};
 

@@ -99,15 +99,12 @@ void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t
 
 }
 
-void timer(use<ITty> out, std::uint64_t time, awaiter<void> await){
+void timer(use<ITty> out, std::chrono::milliseconds time, awaiter<void> await){
 
 
-	Timer timer;
-	auto chan = timer.StartAsChannel(time, 0);
-	await(chan.Read());
-	timer.Stop();
+	await(Timer::WaitFor(time));
 	std::stringstream s;
-	s << "Finished waiting " << (double)(time) / 1000.0 << "seconds \n";
+	s << "Finished waiting " << (double)(time.count()) / 1000.0 << "seconds \n";
 	out.Write(s.str());
 }
 
@@ -144,8 +141,7 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 
 		// as_future allows us to get back a future that we can check the error code instead of throwing exception 
 		// put a timeout of 2 seconds on the read
-		Timer timer;
-		auto timerfut = timer.StartAsChannel(2000, 0).Read();
+		auto timerfut = Timer::WaitFor(std::chrono::seconds{ 2 });
 		auto fut = chan.Read();
 		await(when_any(timerfut, fut));
 		if (timerfut.Ready()){
@@ -274,7 +270,7 @@ void uv_main( awaiter<void> await){
 			if (time == 0){
 				await(out.Write("Please use a valid time in milliseconds that is greater than 0\n"));
 			}else{
-				Uv::DefaultExecutor().Add(std::bind(resumable<void>(timer), out, time));
+				Uv::DefaultExecutor().Add(std::bind(resumable<void>(timer), out, std::chrono::milliseconds{ time }));
 			}
 		}
 		else if (s.substr(0, 3) == "Get"){

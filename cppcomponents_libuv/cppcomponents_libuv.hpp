@@ -9,6 +9,8 @@
 #include <cppcomponents/loop_executor.hpp>
 #include <cppcomponents/buffer.hpp>
 
+#include <chrono>
+
 
 // Define our buffer structure
 #if defined(__SVR4) && !defined(__unix__)
@@ -1491,12 +1493,18 @@ namespace cppcomponents_libuv{
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(ITimer){
 
-			template<class F>
-			void Start(F f, std::uint64_t timeout, std::uint64_t repeat){
-				this->get_interface().StartRaw(cppcomponents::make_delegate<TimerCallback>(f), timeout, repeat);
+			template<class F, class Duration, class DurationRepeat>
+			void Start(F f, Duration timeout, DurationRepeat repeat){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<TimerCallback>(f),
+					std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count(), std::chrono::duration_cast<std::chrono::milliseconds>(repeat).count());
+			}
+			template<class F, class Duration>
+			void Start(F f, Duration timeout){
+				Start(f, timeout, std::chrono::milliseconds{ 0 });
 			}
 
-			cppcomponents::Channel<int> StartAsChannel(std::uint64_t timeout, std::uint64_t repeat){
+			template<class Duration>
+			cppcomponents::Channel<int> StartAsChannel(Duration timeout, Duration repeat){
 				auto chan = cppcomponents::make_channel<int>();
 
 				auto f = [chan](cppcomponents::use<ITimer>, int status){
@@ -1517,7 +1525,43 @@ namespace cppcomponents_libuv{
 			}
 		};
 
+
+
 	};
+
+	struct ITimerStatics : cppcomponents::define_interface <cppcomponents::uuid<0xb8ce6f3b, 0xa3da, 0x489a, 0xa1ae, 0xbca174edb538>>
+	{
+		CPPCOMPONENTS_CONSTRUCT_NO_METHODS(ITimerStatics);
+
+		CPPCOMPONENTS_STATIC_INTERFACE_EXTRAS(ITimerStatics){
+
+			template<class Duration>
+			static cppcomponents::Future<int> WaitFor(Duration d){
+				Class timer;
+				auto p = cppcomponents::make_promise<int>();
+				cppcomponents::use<ITimer> self = timer;
+				timer.Start([p,self](cppcomponents::use<ITimer> timer, int status)mutable{
+					auto copyself = std::move(self);
+					if (status < 0){
+						p.SetError(status);
+					}
+					else{
+						p.Set(status);
+					}
+					copyself.Stop();
+
+				}, d);
+
+				return p.QueryInterface<cppcomponents::IFuture<int>>(); 
+			}
+
+		};
+
+	};
+
+
+
+
 
 	typedef ITimer::TimerCallback TimerCallback;
 
@@ -1536,7 +1580,7 @@ namespace cppcomponents_libuv{
 		};
 	};
 	inline std::string TimerId(){ return "cppcomponents_libuv_dll!Timer"; }
-	typedef runtime_class<TimerId, object_interfaces<ITimer>, factory_interface<ITimerFactory>> Timer_t;
+	typedef runtime_class<TimerId, object_interfaces<ITimer>, factory_interface<ITimerFactory>,static_interfaces<ITimerStatics>> Timer_t;
 	typedef use_runtime_class<Timer_t> Timer;
 
 
