@@ -178,39 +178,45 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter<void> await){
 
 	// stopfut will become ready when someone writes to the channel
+	auto stopfut = stopchan.Read();
 
 	// Set up our Tcp Server at the specified port
 	TcpStream server;
 	auto server_addr = Uv::Ip4Addr("0.0.0.0", port);
 	server.Bind(server_addr);
 
-	auto stopfut = stopchan.Read();
 
 
-	// Get a stream of listen results
+	// We use this to tell the client connections they should stop
 	auto stopclientchan = make_channel<int>();
+
+	// Start listening
 	server.Listen(1, resumable<void>([stopclientchan](use<IUvStream> is, int, awaiter<void> await){	// This is the function that handles the client
+		auto stopfut = stopclientchan.Read();
+
 		TcpStream client;
 		is.Accept(client);
 
 		// Get the read channel
 		auto readchan = client.ReadStartWithChannel();
 
-		// Loop and read the channel
-		for (auto stopfut = stopclientchan.Read(); !stopfut.Ready(); stopfut = stopclientchan.Read()){
+		// Loop and read the channel, as long as
+		while ( !stopfut.Ready()){
 		
 
-			// Get the buffer
+			// Get the readfuture from the channel
 			auto readfut = readchan.Read();
 
-			await.as_future(when_any(readfut,stopfut));
+			// Wait for either some data available to read, or else we were told to stop
+			await(when_any(readfut,stopfut));
 
-			if (!stopfut.Ready()){
-				
-
+			// Check that the read future is the cause as opposed to being told to stop
+			if (readfut.Ready()){
+				// Get the buffer
 				auto buf = readfut.Get();
 
 				// Generate the http response
+				// In this case we are echoing back using http
 				std::stringstream strstream;
 				strstream <<
 					"HTTP/1.1 200 OK\r\n"
@@ -226,12 +232,12 @@ void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter<voi
 			}
 
 		}
-		int i = 0;
 	}));
-
+	// as opposed to await.operator(), await.as_future returns the future
+	// This is useful if you don't want to throw an exception on an error in the future
 	await.as_future(stopfut);
 
-	int i = stopfut.ErrorCode();
+	// This will close out all the attempted reads on the channel with an error
 	stopclientchan.Complete();
 }
 
@@ -243,11 +249,17 @@ void uv_main( awaiter<void> await){
 	Tty out{ 1, false };
 	Tty err{ 2, false };
 
+	std::string helpstr = "Quit and press return to quit,\n"
+		"Fib to get the latest calculated fibonacci number,\n"
+		"Timer <milliseconds> to wait milliseconds,\n"
+		"Get <server> <resource> to get an http resource,\n"
+		"EchoStart <port> to start an http echo server,\n"
+		"EchoList to list ports running echo servers\n"
+		"EchoStop <port> to stop the echo server running on port port,\n"
+		"Help to display this list of commands,\n"
+		"Any other text to have it echoed\n\n";
 	// Write out the prompt
-	await(out.Write("Type Quit and press return to quit,\nFib to get the latest calculated fibonacci number,"
-		"\nTimer <milliseconds> to wait milliseconds,"
-		",Get <server> <resource> to get an http resource,"
-		"\n any other text to have it echoed\n"));
+	await(out.Write(helpstr));
 
 	// Start the fibonacci writer
 
@@ -271,13 +283,19 @@ void uv_main( awaiter<void> await){
 	std::map<int, Channel<int>> running_servers;
 	// Loop until we break
 	while (true){
-		// Read the channel and if we have Quit, then break, if Fib then output latest fibonacci (up to max 100 otherwise echo
+		// Read the input channel
 		auto buf = await(chan.Read());
 		std::string s(buf.Begin(),buf.End());
+
+		// Now handle our commands
+
+		// Quit the program
 		if (s.substr(0, 4) == "Quit"){
 			stopchan.Write(1);
 			break;
 		}
+
+		// Fib - get the fibonacci sequence that has been calculated so far
 		else if (s.substr(0, 3) == "Fib"){
 			std::stringstream s;
 
@@ -289,6 +307,8 @@ void uv_main( awaiter<void> await){
 			s << "Fib(" << n << ") = " << value << "\n";
 			await(out.Write(s.str()));
 		}
+
+		// Start a timer
 		else if (s.substr(0, 5) == "Timer"){
 
 			std::stringstream istr{ s };
@@ -301,12 +321,14 @@ void uv_main( awaiter<void> await){
 				Uv::DefaultExecutor().Add(std::bind(resumable<void>(timer), out, std::chrono::milliseconds{ time }));
 			}
 		}
+
+		// Get a url
 		else if (s.substr(0, 3) == "Get"){
 			std::string dummy, server, port, resource;
 			std::stringstream istr{ s };
 			istr >> dummy >> server >> port >> resource;
 			if (server.empty() || port.empty() || resource.empty()){
-				await(out.Write("Please enter a valid server, service and resource"));
+				await(out.Write("Please enter a valid server, service and resource\n"));
 			}
 			resumable<std::string>(get_resource)(server,port, resource).Then(Uv::DefaultExecutor(), [out,server,port,resource](Future<std::string> f)mutable{
 				auto ec = f.ErrorCode();
@@ -319,6 +341,8 @@ void uv_main( awaiter<void> await){
 
 			});
 		}
+
+		// Start an echo server
 		else if (s.substr(0, 9) == "EchoStart"){
 			std::stringstream istr{ s };
 			std::string dummy;
@@ -337,6 +361,8 @@ void uv_main( awaiter<void> await){
 
 
 		}
+
+		// List running echo servers
 		else if (s.substr(0, 8) == "EchoList"){
 			std::stringstream s;
 			s << "Running servers ";
@@ -346,6 +372,8 @@ void uv_main( awaiter<void> await){
 			s << "\n";
 			out.Write(s.str());
 		}
+
+		// Stop an echoserver
 		else if (s.substr(0, 8) == "EchoStop"){
 			std::stringstream istr{ s };
 			std::string dummy;
@@ -363,13 +391,18 @@ void uv_main( awaiter<void> await){
 
 
 		}
+
+		else if (s.substr(0, 4) == "Help"){
+			await(out.Write(helpstr));
+		}
+
+		// If not a valid command, just echo it back to the screen
 		else{
-			await(out.Write("You typed " + s));
+			await(out.Write("You typed " + s + "\n"));
+			await(out.Write(helpstr));
 		}
 
 	}
-	// Stop reading
-	in.ReadStop();
 
 }
 
