@@ -11,6 +11,8 @@
 #include <thread>
 #include <chrono>
 
+#include <map>
+
 // use<Interface> wraps a cppcomponents interface for use
 // (the reason this is needed is that you can also implement_interface<Interface> when implementing an interface)
 using cppcomponents::use;
@@ -135,6 +137,7 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 	// We get a channel instead of using a callback for reading
 	auto chan = stream.ReadStartWithChannel();
 
+	// This holds the response we get back from the server
 	std::string response;
 
 	while (true){
@@ -143,10 +146,18 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 		// put a timeout of 2 seconds on the read
 		auto timerfut = Timer::WaitFor(std::chrono::seconds{ 2 });
 		auto fut = chan.Read();
+
+		// Await for either a read or timeout
 		await(when_any(timerfut, fut));
+
+		// If we time out then break
 		if (timerfut.Ready()){
 			break;
 		}	
+
+		// If we got here, we know that we did not timeout
+		// So therefore the read from the channel is doen
+		// So check if there was an error, if so break
 		if (fut.ErrorCode() != 0){
 			break;
 		}
@@ -159,61 +170,72 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 
 	}
 
-	// We are done reading so stop
-	stream.ReadStop();
-
 	return response;
 
 
 }
 
-void tcp_echo_server(int port, Channel<int> stopchan,use<ITty> out, awaiter<void> await){
+void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter<void> await){
 
-	auto stopfut = stopchan.Read();
+	// stopfut will become ready when someone writes to the channel
+
+	// Set up our Tcp Server at the specified port
 	TcpStream server;
-
 	auto server_addr = Uv::Ip4Addr("0.0.0.0", port);
-
 	server.Bind(server_addr);
 
-	auto listenchan = server.ListenWithChannel(1);
-	while (!stopfut.Ready()){
-		auto listenfut = listenchan.Read();
-		await(when_any(listenfut, stopfut));
-		if (stopfut.Ready()){
-			break;
-		}
-		auto clientfunc = [](use<IUvStream> stream, awaiter<void> await){
-			TcpStream client;
-			stream.Accept(client);
-			auto readchan = client.ReadStartWithChannel();
+	auto stopfut = stopchan.Read();
 
-			int k = 0;
-			while (true){
-				auto buf = await(readchan.Read());
 
-				std::string s{ buf.Begin(), buf.End() };
+	// Get a stream of listen results
+	auto stopclientchan = make_channel<int>();
+	server.Listen(1, resumable<void>([stopclientchan](use<IUvStream> is, int, awaiter<void> await){	// This is the function that handles the client
+		TcpStream client;
+		is.Accept(client);
+
+		// Get the read channel
+		auto readchan = client.ReadStartWithChannel();
+
+		// Loop and read the channel
+		for (auto stopfut = stopclientchan.Read(); !stopfut.Ready(); stopfut = stopclientchan.Read()){
+		
+
+			// Get the buffer
+			auto readfut = readchan.Read();
+
+			await.as_future(when_any(readfut,stopfut));
+
+			if (!stopfut.Ready()){
+				
+
+				auto buf = readfut.Get();
+
+				// Generate the http response
 				std::stringstream strstream;
-				strstream << "Hi " << k++;
-				std::string response =
+				strstream <<
 					"HTTP/1.1 200 OK\r\n"
 					"Content-Type: text/plain\r\n"
-					"Content-Length: 42\r\n"
-					"\r\n"
-					"abcdefghijklmnopqrstuvwxyz1234567890abcdef\r\n\r\n";
+					"Content-Length: " << buf.Size() << "\r\n"
+					"\r\n";
 
-				await(client.Write(response));
+				strstream.write(buf.Begin(), buf.Size());
+				strstream << "\r\n\r\n";
 
+				// Write to the client
+				await(client.Write(strstream.str()));
 			}
-		};
 
-		Uv::DefaultExecutor().Add(std::bind(resumable<void>(clientfunc), await(listenfut)));
+		}
+		int i = 0;
+	}));
 
-	}
+	await.as_future(stopfut);
 
-	return;
-
+	int i = stopfut.ErrorCode();
+	stopclientchan.Complete();
 }
+
+
 
 void uv_main( awaiter<void> await){
 	// Tty correspoding to stdin, stdout, stderr
@@ -245,6 +267,8 @@ void uv_main( awaiter<void> await){
 	std::uint16_t n = 0;
 	std::uint64_t value = 0;
 
+	// Holds all the echoservers
+	std::map<int, Channel<int>> running_servers;
 	// Loop until we break
 	while (true){
 		// Read the channel and if we have Quit, then break, if Fib then output latest fibonacci (up to max 100 otherwise echo
@@ -300,12 +324,41 @@ void uv_main( awaiter<void> await){
 			std::string dummy;
 			int port = 0;
 			istr >> dummy >> port;
-			if (port == 0){
-				await(out.Write("Please enter a valid port\n"));
+			if (port == 0 || running_servers.count(port)>0){
+				await(out.Write("Please enter a valid port that is unused\n"));
 			}
 			else{
 				auto stopchan = make_channel<int>();
+				running_servers[port] = stopchan;
 				Uv::DefaultExecutor().Add(std::bind(resumable<void>(tcp_echo_server), port, stopchan,out));
+				out.Write("Server started\n");
+
+			}
+
+
+		}
+		else if (s.substr(0, 8) == "EchoList"){
+			std::stringstream s;
+			s << "Running servers ";
+			for (auto& p : running_servers){
+				s << p.first << " ";
+			}
+			s << "\n";
+			out.Write(s.str());
+		}
+		else if (s.substr(0, 8) == "EchoStop"){
+			std::stringstream istr{ s };
+			std::string dummy;
+			int port = 0;
+			istr >> dummy >> port;
+			if (port == 0 || running_servers.count(port) == 0){
+				await(out.Write("Please enter a valid port that is in use\n"));
+			}
+			else{
+				running_servers[port].Complete();
+				running_servers.erase(port);
+				out.Write("Server stopped\n");
+
 			}
 
 
