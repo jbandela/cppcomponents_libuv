@@ -101,7 +101,7 @@ void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t
 
 }
 
-void timer(use<ITty> out, std::chrono::milliseconds time, awaiter<void> await){
+void timer(use<ITty> out, std::chrono::milliseconds time, awaiter await){
 
 
 	await(Timer::WaitFor(time));
@@ -111,7 +111,7 @@ void timer(use<ITty> out, std::chrono::milliseconds time, awaiter<void> await){
 }
 
 
-std::string get_resource(const std::string& server,const std::string& port, const std::string& resource, awaiter<std::string> await){
+std::string get_resource(const std::string& server,const std::string& port, const std::string& resource, awaiter await){
 
 	// Look up the address asynchronously
 	auto addr = await(Uv::Getaddrinfo(server, port, nullptr));
@@ -175,7 +175,7 @@ std::string get_resource(const std::string& server,const std::string& port, cons
 
 }
 
-void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter<void> await){
+void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter await){
 
 	// stopfut will become ready when someone writes to the channel
 	auto stopfut = stopchan.Read();
@@ -191,7 +191,7 @@ void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter<voi
 	auto stopclientchan = make_channel<int>();
 
 	// Start listening
-	server.Listen(1, resumable<void>([stopclientchan](use<IUvStream> is, int, awaiter<void> await){	// This is the function that handles the client
+	server.Listen(1, resumable([stopclientchan](use<IUvStream> is, int, awaiter await){	// This is the function that handles the client
 		auto stopfut = stopclientchan.Read();
 
 		TcpStream client;
@@ -243,7 +243,7 @@ void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter<voi
 
 
 
-void uv_main( awaiter<void> await){
+void uv_main( awaiter await){
 	// Tty correspoding to stdin, stdout, stderr
 	Tty in{ 0, true };
 	Tty out{ 1, false };
@@ -318,7 +318,7 @@ void uv_main( awaiter<void> await){
 			if (time == 0){
 				await(out.Write("Please use a valid time in milliseconds that is greater than 0\n"));
 			}else{
-				Uv::DefaultExecutor().Add(std::bind(resumable<void>(timer), out, std::chrono::milliseconds{ time }));
+				Uv::DefaultExecutor().Add(std::bind(resumable(timer), out, std::chrono::milliseconds{ time }));
 			}
 		}
 
@@ -330,7 +330,7 @@ void uv_main( awaiter<void> await){
 			if (server.empty() || port.empty() || resource.empty()){
 				await(out.Write("Please enter a valid server, service and resource\n"));
 			}
-			resumable<std::string>(get_resource)(server,port, resource).Then(Uv::DefaultExecutor(), [out,server,port,resource](Future<std::string> f)mutable{
+			resumable(get_resource)(server,port, resource).Then(Uv::DefaultExecutor(), [out,server,port,resource](Future<std::string> f)mutable{
 				auto ec = f.ErrorCode();
 				if (ec < 0){
 					std::stringstream s;
@@ -354,7 +354,17 @@ void uv_main( awaiter<void> await){
 			else{
 				auto stopchan = make_channel<int>();
 				running_servers[port] = stopchan;
-				Uv::DefaultExecutor().Add(std::bind(resumable<void>(tcp_echo_server), port, stopchan,out));
+				Uv::DefaultExecutor().Add(
+					[stopchan, out, port]()mutable{
+						resumable(tcp_echo_server)(port, stopchan, out)
+							.Then([out, port](Future<void> f)mutable{
+								if (f.ErrorCode()){
+									std::stringstream s;
+									s << "EchoServer on port " << port << " had error " << f.ErrorCode() << "\n";
+									out.Write(s.str()); 
+								}
+							});
+				});
 				out.Write("Server started\n");
 
 			}
@@ -410,7 +420,7 @@ void uv_main( awaiter<void> await){
 #include <iostream>
 int main(){
 
-	resumable<void>(uv_main)().Then([](Future<void> f){
+	resumable(uv_main)().Then([](Future<void> f){
 		// Exit loop at end of scope
 		LoopExiter exiter;
 		

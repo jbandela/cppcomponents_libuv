@@ -239,7 +239,7 @@ TEST(Tcp, TcpStream){
 
 
 
-	server.Listen(1, cppcomponents::resumable<void>([&](use<IUvStream> stream, int, cppcomponents::awaiter<void> await){
+	server.Listen(1, cppcomponents::resumable([&](use<IUvStream> stream, int, cppcomponents::awaiter await){
 
 
 		TcpStream client;
@@ -263,7 +263,7 @@ TEST(Tcp, TcpStream){
 	}));
 
 
-	auto client_func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+	auto client_func = cppcomponents::resumable([&](cppcomponents::awaiter await){
 		for (int i = 0; i < 4; i++){
 			auto client_address = Uv::Ip4Addr("127.0.0.1", TEST_PORT);
 			TcpStream client;
@@ -302,7 +302,7 @@ TEST(fs, fs1){
 
 
 
-	auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+	auto func = cppcomponents::resumable([&](cppcomponents::awaiter await){
 
 		LoopExiter exiter;
 		
@@ -416,7 +416,7 @@ TEST(udp, udp){
 	luv::UdpStream send_socket;
 	luv::UdpStream recv_socket;
 
-	auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+	auto func = cppcomponents::resumable([&](cppcomponents::awaiter await){
 		LoopExiter exiter;
 
 		auto recv_addr = luv::Uv::Ip4Addr("0.0.0.0", 7768);
@@ -454,7 +454,7 @@ TEST(async2, async2){
 
 
 
-	auto calculate = cppcomponents::resumable<int>([&](cppcomponents::awaiter<int> await){
+	auto calculate = cppcomponents::resumable([&](cppcomponents::awaiter await){
 
 		auto f1 = Uv::Async([](){return 7; });
 
@@ -465,7 +465,7 @@ TEST(async2, async2){
 
 	});
 
-	auto func = cppcomponents::resumable<void>([&](cppcomponents::awaiter<void> await){
+	auto func = cppcomponents::resumable([&](cppcomponents::awaiter await){
 		LoopExiter exiter;
 
 		int value = await(calculate());
