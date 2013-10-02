@@ -2077,9 +2077,7 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 	void SetupPrepare(){
 		auto pthis = this;
 		// This assures the loop will at least run once
-		prep_.Ref();
 		prep_.Start([pthis](cppcomponents::use<IPrepare> prep, int){
-			prep.Unref();
 			pthis->exec_.RunQueuedClosures();
 			if (pthis->stop_.load() == true){
 				pthis->loop_.Stop();
@@ -2089,9 +2087,7 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 	void SetupPrepareOne(){
 		auto pthis = this;
 		// This assures the loop will at least run once
-		prep_.Ref();
 		prep_.Start([pthis](cppcomponents::use<IPrepare> prep, int){
-			prep.Unref();
 			pthis->exec_.TryOneClosure();
 		});
 	}
