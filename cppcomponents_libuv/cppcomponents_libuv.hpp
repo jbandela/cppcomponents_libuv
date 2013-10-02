@@ -2483,6 +2483,15 @@ namespace cppcomponents_libuv{
 	typedef runtime_class<FsId, static_interfaces<IFsStatics>> Fs_t;
 	typedef use_runtime_class<Fs_t> Fs;
 
+	struct FsCloser{
+		FileOsType file_;
+		FsCloser(FileOsType f) :file_(f){}
+
+		~FsCloser(){
+			Fs::Close(file_);
+		}
+	};
+
 	class LoopExiter{
 		use<IUvExecutor> exec_;
 		LoopExiter(const LoopExiter&) = delete;

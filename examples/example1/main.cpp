@@ -54,6 +54,10 @@ using cppcomponents_libuv::ErrorCodes;
 // ThreadPoolExecutor will run a function in a Thread Pool
 using cppcomponents_libuv::ThreadPoolExecutor;
 
+// Access to file functions
+using cppcomponents_libuv::Fs;
+
+
 void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t> > chan, Channel<int> stopchan){
 	// First fibonacci is 0
 	// So go ahead and write that as our first value
@@ -244,6 +248,84 @@ void tcp_echo_server(int port, Channel<int> stopchan, use<ITty> out, awaiter awa
 }
 
 
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <iomanip>
+
+void calculate_sha(std::string file, use<ITty> out,Channel<std::pair<std::uint64_t,std::uint64_t>> progress, awaiter await){
+
+	// This is our read buffer
+	std::vector<char> buffer(4096);
+
+	// Open the file
+	auto f = await(Fs::Open(file, O_RDONLY, 0));
+
+	// Close the file when we go out of scope
+	cppcomponents_libuv::FsCloser closer{ f };
+
+	// Get the filesize
+	auto stat = await(Fs::Stat(f));
+	auto size = stat.st_size;
+
+	// Write that we have processed 0 bytes out of size bytes
+	auto fut = progress.Write({ 0, size });
+
+
+	// The sha1 class is a class that is taken from the boost.uuid
+	// and is actually used internally for something else,
+	// However, we will repurpose it for this example
+	cppcomponents::detail::sha1 sha;
+	
+	// The number of bytes processed
+	std::uint64_t bytesprocessed = 0;
+
+	// Read in a loop
+	while (true){
+
+		// Result is the number of bytes read, 0 if EOF
+		// in libuv result would be negative if error
+		// However, cppcomponents_libuv throws an exception in that case
+		auto result = await(Fs::Read(f, &buffer[0], buffer.size(), -1));
+		if (result == 0){
+			break;
+		}
+
+		// Process the sha calculation on another thread
+		// Uv::Async runs the continuation of the future back in the main
+		// loop so by the time await returns we are back in the main loop thread
+		await(Uv::Async([&](){
+			sha.process_bytes(&buffer[0], result);
+		}));
+		bytesprocessed += result;
+
+		// fut.Ready means somebody read the last value we
+		// wrote to progress, so write our latest progress
+		if (fut.Ready()){
+			fut = progress.Write({ bytesprocessed, size });
+		}
+
+	}
+
+	// Calculate the final digest on another thread
+	auto digest = await(Uv::Async([&](){
+		std::uint32_t digest[5];
+		sha.get_digest(digest);
+		std::stringstream str;
+		str << std::hex << std::uppercase;
+		for (int i = 0; i < 5; i++){
+			str << digest[i];
+		}
+		return str.str();
+
+	}));
+
+	// Write there results to output
+	std::stringstream outstr;
+	outstr << "The sha1 hash of " << file << " is " << digest << "\n\n";
+	out.Write(outstr.str());
+	
+}
+
 
 void uv_main( awaiter await){
 	// Tty correspoding to stdin, stdout, stderr
@@ -284,6 +366,9 @@ void uv_main( awaiter await){
 
 	// Holds all the echoservers
 	std::map<int, Channel<int>> running_servers;
+
+	// Holds all the sha1 calculations
+	std::map < std::string, Channel < std::pair<std::uint64_t, std::uint64_t >> > sha_calculations;
 	// Loop until we break
 	while (true){
 		// Read the input channel
@@ -403,6 +488,57 @@ void uv_main( awaiter await){
 			}
 
 
+		}
+		// Start an echo server
+		else if (s.substr(0, 13) == "Sha1Calculate"){
+			std::stringstream istr{ s };
+			std::string dummy;
+			std::string file;
+			istr >> dummy >> file;
+
+			if (sha_calculations.count(file)){
+
+				out.Write("You have already run a calculation on that file\n");
+			}
+			else{
+				auto shaprogresschan = make_channel<std::pair<std::uint64_t, std::uint64_t>>();
+				// Write a bogus value so we know that we have not yet started calculating
+				shaprogresschan.Write({ 1, 0 });
+
+				// Start the calculation
+				resumable(calculate_sha)(file, out, shaprogresschan).Then([out, file, shaprogresschan](Future<void> f)mutable{
+					std::stringstream str;
+					if (f.ErrorCode()){
+						str << "Sha of file " << file << " returned error code " << f.ErrorCode() << "\n";
+						out.Write(str.str());
+					}
+					shaprogresschan.Complete();
+				});
+
+				// Add the channel to the map
+				sha_calculations[file] = shaprogresschan;
+			}
+		}
+		else if (s.substr(0, 11) == "Sha1Pending"){
+			std::stringstream str;
+			str << "Pending sha1...\n";
+			for (auto& p : sha_calculations){
+				if (p.second.IsComplete()){
+					str << p.first << " : Completed\n";
+					
+				}
+				else{
+					auto fut = await.as_future(p.second.Read());
+					if (fut.ErrorCode()){
+						str << p.first << " : Error getting progress\n";
+					}
+					else{
+						auto val = fut.Get();
+						str << p.first << " : " << val.first << " / " << val.second << "\n";
+					}
+				}
+			}
+			out.Write(str.str());
 		}
 
 		else if (s.substr(0, 4) == "Help"){
