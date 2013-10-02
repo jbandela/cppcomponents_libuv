@@ -2058,7 +2058,6 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 	std::atomic<bool> stop_;
 
 	ImpExecutor(use<ILoop> loop) :loop_{ loop }, prep_{ Prepare{ loop } }, stop_{ false }{
-		prep_.Unref();
 	}
 
 
@@ -2077,7 +2076,10 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 	}
 	void SetupPrepare(){
 		auto pthis = this;
-		prep_.Start([pthis](cppcomponents::use<IPrepare>, int){
+		// This assures the loop will at least run once
+		prep_.Ref();
+		prep_.Start([pthis](cppcomponents::use<IPrepare> prep, int){
+			prep.Unref();
 			pthis->exec_.RunQueuedClosures();
 			if (pthis->stop_.load() == true){
 				pthis->loop_.Stop();
@@ -2086,7 +2088,10 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 	}
 	void SetupPrepareOne(){
 		auto pthis = this;
-		prep_.Start([pthis](cppcomponents::use<IPrepare>, int){
+		// This assures the loop will at least run once
+		prep_.Ref();
+		prep_.Start([pthis](cppcomponents::use<IPrepare> prep, int){
+			prep.Unref();
 			pthis->exec_.TryOneClosure();
 		});
 	}
@@ -2135,6 +2140,47 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 	}
 };
 
+struct ImpThreadPoolExecutor :implement_runtime_class<ImpThreadPoolExecutor, ThreadPoolExecutor_t>
+{
+	typedef cppcomponents::delegate < void() > ClosureType;
+	std::atomic<std::uint32_t> count_;
+
+	use<IUvExecutor> exec_;
+
+
+	ImpThreadPoolExecutor(use<IUvExecutor> exec)
+		:count_(0), exec_{ exec }
+	{}
+
+	use<ILoop> GetLoop(){ return exec_.GetLoop(); }
+
+	void AddDelegate(use<ClosureType> f){
+
+		// The iface keeps a reference to this so it does not get destroyed
+		// until the closure completes
+		auto iface = this->QueryInterface<InterfaceUnknown>();
+		count_.fetch_add(1);
+
+		// We cannot directly call loop.QueueWork becase it like almost all of libuv is not 
+		// thread safe. Therefore we call the executer.Add function (which is thread-safe)
+		// To execute on the main loop
+		auto func = [iface, this,f]()mutable{
+			exec_.GetLoop().QueueWork(f).Then([iface, this](Future<void> f)mutable{
+				this->count_.fetch_sub(1);
+				iface = nullptr;
+			});
+			iface = nullptr;
+			f = nullptr;
+		};
+		exec_.Add(func);
+	}
+	std::size_t NumPendingClosures(){
+		return count_.load();
+	}
+
+
+
+};
 
 CPPCOMPONENTS_DEFINE_FACTORY();
 

@@ -480,3 +480,40 @@ TEST(async2, async2){
 	Uv::DefaultExecutor().Loop();
 
 }
+
+
+TEST(threadpool, threadpool){
+
+	using namespace cppcomponents_libuv;
+	auto loopexec = Uv::DefaultExecutor();
+
+
+
+	auto calculate = cppcomponents::resumable([&](cppcomponents::awaiter await){
+
+		ThreadPoolExecutor e {loopexec };
+
+		auto f1 = cppcomponents::async(e,[](){return 7; });
+
+		auto f2 = cppcomponents::async(e, [](){return 3; });
+
+		return await(f1) * await(f2);
+
+
+	});
+
+	auto func = cppcomponents::resumable([&](cppcomponents::awaiter await){
+		LoopExiter exiter;
+
+		int value = await(calculate());
+
+		EXPECT_EQ(21, value);
+
+
+	});
+
+	func();
+
+	loopexec.Loop();
+
+}

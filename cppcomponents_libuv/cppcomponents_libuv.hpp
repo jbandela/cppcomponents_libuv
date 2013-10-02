@@ -630,6 +630,14 @@ namespace cppcomponents_libuv{
 		cppcomponents::use<cppcomponents::InterfaceUnknown> Create(use<ILoop> loop);
 
 		CPPCOMPONENTS_CONSTRUCT(IExecutorFactory, Create);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IExecutorFactory){
+
+			use<cppcomponents::InterfaceUnknown> TemplatedConstructor(){
+				return this->get_interface().Create(Loop::DefaultLoop());
+			}
+
+		};
 	};
 
 	inline std::string ExecutorId(){ return "cppcomponents_libuv_dll!Executor"; }
@@ -637,6 +645,7 @@ namespace cppcomponents_libuv{
 		cppcomponents::factory_interface<IExecutorFactory> > Executor_t;
 
 	typedef cppcomponents::use_runtime_class<Executor_t> Executor;
+
 
 
 	struct IUvStatics
@@ -760,6 +769,8 @@ namespace cppcomponents_libuv{
 
 	typedef cppcomponents::runtime_class<UvId, cppcomponents::static_interfaces<IUvStatics>> Uv_t;
 	typedef cppcomponents::use_runtime_class<Uv_t> Uv;
+
+
 	
 	struct IStream
 		: public cppcomponents::define_interface < cppcomponents::uuid < 
@@ -2754,6 +2765,35 @@ namespace cppcomponents_libuv{
 	typedef use_runtime_class<Barrier_t> Barrier;
 
 
+	struct IUvThreadPoolExecutor :cppcomponents::define_interface < cppcomponents::uuid <0xf6b7f581 , 0x7e05 , 0x4c39 , 0x9002 , 0x6d0575c57c0e>,
+		cppcomponents::IExecutor>
+	{
+		use<ILoop> GetLoop();
+
+		CPPCOMPONENTS_CONSTRUCT(IUvThreadPoolExecutor, GetLoop);
+
+	};
+
+	struct IThreadPoolExecutorFactory :cppcomponents::define_interface < cppcomponents::uuid < 0xfab5705b , 0xfa8e , 0x43d8 , 0x9e83 , 0xbd3b897b5c64> >
+	{
+		cppcomponents::use<cppcomponents::InterfaceUnknown> Create(use<IUvExecutor> exec);
+
+		CPPCOMPONENTS_CONSTRUCT(IThreadPoolExecutorFactory, Create);
+
+		CPPCOMPONENTS_INTERFACE_EXTRAS(IThreadPoolExecutorFactory){
+
+			use<cppcomponents::InterfaceUnknown> TemplatedConstructor(){
+				return this->get_interface().Create(Uv::DefaultExecutor());
+			}
+
+		};
+	};
+
+	inline std::string ThreadPoolExecutorId(){ return "cppcomponents_libuv_dll!ThreadPoolExecutor"; }
+	typedef cppcomponents::runtime_class<ThreadPoolExecutorId, cppcomponents::object_interfaces<IUvThreadPoolExecutor>,
+		cppcomponents::factory_interface<IThreadPoolExecutorFactory> > ThreadPoolExecutor_t;
+
+	typedef cppcomponents::use_runtime_class<ThreadPoolExecutor_t> ThreadPoolExecutor;
 
 	// uv_once is not implemented use std::once;
 

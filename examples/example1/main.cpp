@@ -51,6 +51,8 @@ using cppcomponents_libuv::LoopExiter;
 
 using cppcomponents_libuv::ErrorCodes;
 
+// ThreadPoolExecutor will run a function in a Thread Pool
+using cppcomponents_libuv::ThreadPoolExecutor;
 
 void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t> > chan, Channel<int> stopchan){
 	// First fibonacci is 0
@@ -269,8 +271,9 @@ void uv_main( awaiter await){
 	// 93 is the largest fibonacci number that will fit in 64bits
 	const std::uint16_t fibonacci_n = 93;
 
-	// Uv::Async will run the function on the libuv threadpool
-	Uv::Async(std::bind(fibonacci, fibonacci_n, fibchan,stopchan));
+	// Run fibonacci function in thread pool 
+	ThreadPoolExecutor tpool;
+	tpool.Add(std::bind(fibonacci, fibonacci_n, fibchan,stopchan));
 
 	// Start reading and get it as a channel
 	auto chan = in.ReadStartWithChannel();
