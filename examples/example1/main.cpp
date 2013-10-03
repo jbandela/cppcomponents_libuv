@@ -394,7 +394,7 @@ void uv_main( awaiter await){
 
 			// If n==fibonacci_n, then the calculation is already finished
 			if (n < fibonacci_n){
-				std::tie(n, value) = await(fibchan.Read());
+				std::tie(n, value) = await(Uv::DefaultExecutor(), fibchan.Read());
 			}
 
 			s << "Fib(" << n << ") = " << value << "\n";
@@ -533,7 +533,7 @@ void uv_main( awaiter await){
 					
 				}
 				else{
-					auto fut = await.as_future(p.second.Read());
+					auto fut = await.as_future(Uv::DefaultExecutor(),p.second.Read());
 					if (fut.ErrorCode()){
 						str << p.first << " : Error getting progress\n";
 					}
