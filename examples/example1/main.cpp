@@ -56,6 +56,8 @@ using cppcomponents_libuv::ThreadPoolExecutor;
 
 // Access to file functions
 using cppcomponents_libuv::Fs;
+// Close a file handle at scope end
+using cppcomponents_libuv::FsCloser;
 
 
 void fibonacci(std::uint16_t n, Channel < std::pair<std::uint16_t, std::uint64_t> > chan, Channel<int> stopchan){
@@ -261,7 +263,7 @@ void calculate_sha(std::string file, use<ITty> out,Channel<std::pair<std::uint64
 	auto f = await(Fs::Open(file, O_RDONLY, 0));
 
 	// Close the file when we go out of scope
-	cppcomponents_libuv::FsCloser closer{ f };
+	FsCloser closer{ f };
 
 	// Get the filesize
 	auto stat = await(Fs::Stat(f));
@@ -310,12 +312,14 @@ void calculate_sha(std::string file, use<ITty> out,Channel<std::pair<std::uint64
 	auto digest = await(Uv::Async([&](){
 		std::uint32_t digest[5];
 		sha.get_digest(digest);
-		std::stringstream str;
-		str << std::hex << std::uppercase;
+		std::string ret;
 		for (int i = 0; i < 5; i++){
+			std::stringstream str;
+			str << std::hex << std::uppercase << std::setfill('0') << std::setw(8);
 			str << digest[i];
+			ret += str.str();
 		}
-		return str.str();
+		return ret;
 
 	}));
 
@@ -339,7 +343,8 @@ void uv_main( awaiter await){
 		"Get <server> <resource> to get an http resource,\n"
 		"EchoStart <port> to start an http echo server,\n"
 		"EchoList to list ports running echo servers\n"
-		"EchoStop <port> to stop the echo server running on port port,\n"
+		"Sha1Calculate <filename> to calculate the SHA1 digest of a file,\n"
+		"Sha1Status to list the status of all the Sha1Calculate filenames,\n"
 		"Help to display this list of commands,\n"
 		"Any other text to have it echoed\n\n";
 	// Write out the prompt
@@ -519,9 +524,9 @@ void uv_main( awaiter await){
 				sha_calculations[file] = shaprogresschan;
 			}
 		}
-		else if (s.substr(0, 11) == "Sha1Pending"){
+		else if (s.substr(0, 10) == "Sha1Status"){
 			std::stringstream str;
-			str << "Pending sha1...\n";
+			str << "Sha1 status\n";
 			for (auto& p : sha_calculations){
 				if (p.second.IsComplete()){
 					str << p.first << " : Completed\n";
@@ -538,6 +543,7 @@ void uv_main( awaiter await){
 					}
 				}
 			}
+			str << "\n";
 			out.Write(str.str());
 		}
 
