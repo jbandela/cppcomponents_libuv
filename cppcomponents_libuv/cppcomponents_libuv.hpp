@@ -924,15 +924,22 @@ namespace cppcomponents_libuv{
 			}
 
 			template<std::size_t N>
-			cppcomponents::use<cppcomponents::IFuture<int>> Write(const char (&ar)[N]){
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(char (&ar)[N]){
 				Buffer b;
 				b.base = const_cast<char*>(&ar[0]);
 				b.len = N;
 				
 				return Write(&b, 1);
 			}
+			// Writes a string literal, note does not write terminating 0
+			template<std::size_t N>
+			cppcomponents::use<cppcomponents::IFuture<int>> Write(const char(&ar)[N]){
+				Buffer b;
+				b.base = const_cast<char*>(&ar[0]);
+				b.len = N-1;
 
-
+				return Write(&b, 1);
+			}
 
 			template<std::size_t N>
 			cppcomponents::use<cppcomponents::IFuture<int>> Write(Buffer (&ar)[N]){

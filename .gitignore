@@ -168,4 +168,5 @@ pip-log.txt
 
 *.so
 *.out
+*.*~
 
