@@ -10,29 +10,20 @@ using cppcomponents::Channel;
 const std::uint16_t largest_64bit_fibonacci = 93;
 
 void fibonacci(Channel < std::pair<std::uint16_t, std::uint64_t> > out_channel){
-
-	auto write_future = out_channel.Write({ 0, 0 });
-
-	std::uint64_t fibs[largest_64bit_fibonacci+1];
-
-	fibs[0] = 0;
-	fibs[1] = 1;
-
-	for (std::uint16_t i = 2; i <= largest_64bit_fibonacci; ++i){
-		fibs[i] = fibs[i - 2] + fibs[i - 1];
-		if (write_future.Ready() || i==largest_64bit_fibonacci){
-			write_future = out_channel.Write({ i, fibs[i] });
-
-		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(50));
-	}
-
-	
-
+    auto write_future = out_channel.Write({ 0, 0 });
+    std::uint64_t fibs[largest_64bit_fibonacci+1];
+    fibs[0] = 0;
+    fibs[1] = 1;
+    for (std::uint16_t i = 2; i <= largest_64bit_fibonacci; ++i){
+        fibs[i] = fibs[i - 2] + fibs[i - 1];
+        if (write_future.Ready() || i==largest_64bit_fibonacci){
+            write_future = out_channel.Write({ i, fibs[i] });
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
 }
 
 void async_main(cppcomponents::awaiter await){
-
     cppcomponents_libuv::Tty out{1,false};
     cppcomponents_libuv::Tty in{0,true};
     auto input_channel = in.ReadStartWithChannel();
@@ -54,7 +45,6 @@ void async_main(cppcomponents::awaiter await){
 		await(out.Write("Fibonacci calculations complete\n"));
 		return;
 	    }
-
 	}
     }
 }
