@@ -1332,8 +1332,8 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IPoll, StartRaw,Stop);
 		CPPCOMPONENTS_INTERFACE_EXTRAS(IPoll){
 			template<class F>
-			void Start(F f){
-				this->get_interface().StartRaw(cppcomponents::make_delegate<PollCallback>(f));
+			void Start(int events, F f){
+				this->get_interface().StartRaw(events, cppcomponents::make_delegate<PollCallback>(f));
 				
 			}
 		};
@@ -2536,8 +2536,8 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(IFsPoll, StartRaw, Stop);
 		CPPCOMPONENTS_INTERFACE_EXTRAS(IFsPoll){
 			template<class F>
-			void Start(F f){
-				this->get_interface().StartRaw(cppcomponents::make_delegate<FsPollCallback>(f));
+			void Start(F f, cr_string path, unsigned int msinterval){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<FsPollCallback>(f),path,msinterval);
 			}
 		};
 	};
@@ -2579,8 +2579,8 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_CONSTRUCT(ISignal, StartRaw, Stop);
 		CPPCOMPONENTS_INTERFACE_EXTRAS(ISignal){
 			template<class F>
-			void Start(F f){
-				this->get_interface().StartRaw(cppcomponents::make_delegate<SignalCallback>(f));
+			void Start(F f, int signum){
+				this->get_interface().StartRaw(cppcomponents::make_delegate<SignalCallback>(f),int signum);
 			}
 		};
 	};

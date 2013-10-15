@@ -4,9 +4,9 @@
 // Copied and modified from uv-errno.h
 
 namespace cppcomponents_libuv{
-
-		enum class ErrorCodes{
-			Eof = (-4095),
+	namespace ErrorCodes{
+	enum {
+		Eof = (-4095),
 			Unknown = (-4094),
 
 			Addrfamily = (-3000),
@@ -342,8 +342,9 @@ namespace cppcomponents_libuv{
 #endif
 
 
-		};
+	};
 
+}
 }
 /* Only map to the system errno on non-Windows platforms. It's apparently
 * a fairly common practice for Windows programmers to redefine errno codes.

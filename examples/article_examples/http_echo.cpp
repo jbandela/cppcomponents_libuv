@@ -9,32 +9,27 @@ using cppcomponents::Channel;
 
 void echo_server(int port, Channel<int> stopchan, cppcomponents::awaiter await){
 
-	auto stopfut = stopchan.Read();
+    auto stopfut = stopchan.Read();
 
     cppcomponents_libuv::TcpStream server;
-	auto server_addr = cppcomponents_libuv::Uv::Ip4Addr("0.0.0.0", port);
-	server.Bind(server_addr);
+    auto server_addr = cppcomponents_libuv::Uv::Ip4Addr("0.0.0.0", port);
+    server.Bind(server_addr);
 
-	server.Listen(1, cppcomponents::resumable([](cppcomponents::use<cppcomponents_libuv::IUvStream> is,
+    server.Listen(1, cppcomponents::resumable([](cppcomponents::use<cppcomponents_libuv::IUvStream> is,
                     int, cppcomponents::awaiter await){
-
-		cppcomponents_libuv::TcpStream client;
-		is.Accept(client);
-		auto readchan = client.ReadStartWithChannel();
+        cppcomponents_libuv::TcpStream client;
+        is.Accept(client);
+        auto readchan = client.ReadStartWithChannel();
         while ( true ){
             auto buf = await(readchan.Read());
-
             std::stringstream strstream;
             strstream <<
             "HTTP/1.1 200 OK\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: " << buf.Size() << "\r\n"
             "\r\n";
-
             strstream.write(buf.Begin(), buf.Size());
-
             await(client.Write(strstream.str()));
-
         }
     }));
     await(stopfut);
@@ -79,14 +74,14 @@ void async_main(cppcomponents::awaiter await){
 int main(){
     auto resumable_main = cppcomponents::resumable(async_main);
     resumable_main().Then([&](Future<void> f){
-    if(f.ErrorCode()){
-        std::cerr << "\nasync_main had error with error code " << f.ErrorCode() << "\n";
-    }
-    else{
-        std::cerr << "\nasync_main returned without throwing an exception\n";
-    }
+        if(f.ErrorCode()){
+            std::cerr << "\nasync_main had error with error code " << f.ErrorCode() << "\n";
+        }
+        else{
+            std::cerr << "\nasync_main returned without throwing an exception\n";
+        }
         cppcomponents_libuv::Uv::DefaultExecutor().MakeLoopExit();
-    return f.ErrorCode();
+        return f.ErrorCode();
     });
     cppcomponents_libuv::Uv::DefaultExecutor().Loop();
 }
