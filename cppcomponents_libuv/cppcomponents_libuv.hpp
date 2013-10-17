@@ -2580,7 +2580,7 @@ namespace cppcomponents_libuv{
 		CPPCOMPONENTS_INTERFACE_EXTRAS(ISignal){
 			template<class F>
 			void Start(F f, int signum){
-				this->get_interface().StartRaw(cppcomponents::make_delegate<SignalCallback>(f),int signum);
+				this->get_interface().StartRaw(cppcomponents::make_delegate<SignalCallback>(f),signum);
 			}
 		};
 	};

@@ -49,7 +49,7 @@ using cppcomponents_libuv::Uv;
 // Use RAII to guarantee call to Uv::DefaultExecutor().MakeLoopExit();
 using cppcomponents_libuv::LoopExiter;
 
-using cppcomponents_libuv::ErrorCodes;
+namespace ErrorCodes = cppcomponents_libuv::ErrorCodes;
 
 // ThreadPoolExecutor will run a function in a Thread Pool
 using cppcomponents_libuv::ThreadPoolExecutor;
