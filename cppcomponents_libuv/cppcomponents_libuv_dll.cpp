@@ -2056,15 +2056,17 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 
 	cppcomponents::LoopExecutor exec_;
 	use<IPrepare> prep_;
+	use<IIdle> idle_;
 	use<ILoop> loop_;
 	std::atomic<bool> stop_;
 
-	ImpExecutor(use<ILoop> loop) :loop_{ loop }, prep_{ Prepare{ loop } }, stop_{ false }{
+	ImpExecutor(use<ILoop> loop) :loop_{ loop }, prep_{ Prepare{ loop } }, idle_{ Idle{ loop } }, stop_{ false }{
 	}
 
 
 	~ImpExecutor(){
 		prep_ = nullptr;
+		idle_ = nullptr;
 		loop_.RunNoWait();
 	}
 
@@ -2085,6 +2087,15 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 				pthis->loop_.Stop();
 			}
 		});
+		// This assures the loop will at least run once
+		idle_.Start([pthis](cppcomponents::use<IIdle> , int){
+			pthis->exec_.RunQueuedClosures();
+			if (pthis->stop_.load() == true){
+				pthis->loop_.Stop();
+			}
+		});
+
+
 	}
 	void SetupPrepareOne(){
 		auto pthis = this;
@@ -2111,18 +2122,21 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 		}
 		loop_.RunNoWait();
 		prep_.Stop();
+		idle_.Stop();
 	}
 	void RunQueuedClosures(){
 		stop_.store(false);
 		SetupPrepare();
 		loop_.RunNoWait();
 		prep_.Stop();
+		idle_.Stop();
 	}
 	bool TryOneClosure(){
 		stop_.store(false);
 		SetupPrepareOne();
 		loop_.RunOnce();
 		prep_.Stop();
+		idle_.Stop();
 
 		// Always return true 
 		// since we don't know that loop did not do any work
