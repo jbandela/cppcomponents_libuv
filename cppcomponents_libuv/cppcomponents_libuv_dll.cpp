@@ -416,7 +416,6 @@ struct ImpHandleBase{
 			SWALLOW_EXCEPTIONS(cb());
 		}
 		h->data = nullptr;
-		static_cast<Derived*>(pthis)->ResetCallbacks();
 		pthis->close_completed_ = true;
 		if (pthis->deleteonclose_){
 			delete static_cast<Derived*>(pthis);
@@ -425,6 +424,7 @@ struct ImpHandleBase{
 		}
 	}
 	void ReleaseImplementationDestroy(){ 
+		static_cast<Derived*>(this)->ResetCallbacks();
 		if (close_completed_){
 			delete static_cast<Derived*>(this);
 		}
@@ -589,6 +589,9 @@ struct ImpStreamBase : ImpHandleBase<Derived,uv_stream_t>{
 	use<ReadCallback> read_cb_;
 
 	bool reading_ = false;
+	use<Read2Callback> read2_cb_;
+
+	bool reading2_ = false;
 
 
 	void ResetCallbacks(){
@@ -651,6 +654,7 @@ struct ImpStreamBase : ImpHandleBase<Derived,uv_stream_t>{
 			//istream_self_ = nullptr;
 			reading_ = false;
 			read_cb_ = nullptr;
+			throw;
 		}
 
 	}
@@ -660,47 +664,39 @@ struct ImpStreamBase : ImpHandleBase<Derived,uv_stream_t>{
 		reading_ = false;
 		//istream_self_ = nullptr;
 	}
-	/*
-	static void Read2CallbackRaw(uv_stream_t* stream, ssize_t nread, uv_buf_t buf,int pending){
-		clv::Buffer b;
-		b.base = buf.base;
-		b.len = buf.len;
+	static void Read2CallbackRaw(uv_pipe_t* stream,ssize_t nread,	const uv_buf_t* buf, uv_handle_type pending){
+		//auto ibuf = cppcomponents::Buffer::OwningIBufferFromPointer(buf.base);
+		auto b = cppcomponents::Buffer::OwningIBufferFromPointer(buf->base);
+		if (nread >= 0){
+			b.SetSize(nread);
+		}
 
-		auto cb = delegate_from_void<Read2CallbackHelper>(stream->data);
-		cb(nread, b,pending);
-
-		delete buf.base;
+		auto derived = static_cast<Derived*>(reinterpret_cast<HType*>(stream));
+		ImpStreamBase& imp = *derived;
+		auto is = derived->template QueryInterface<clv::IStream>();
+		SWALLOW_EXCEPTIONS(imp.read2_cb_(is, nread, b,pending));
+		if (imp.reading2_ == false){
+			imp.read2_cb_ = nullptr;
+		}
 	}
-	*/
 
-	// Can't figure out how to use uv_read2_start
-	// Plan on implentation after more research
 	void Read2StartRaw(use<Read2Callback> cb){
-		throw error_not_implemented();
-
-	/*	auto is = static_cast<Derived*>(this)->template QueryInterface<clv::IStream>();
-		auto cbh = make_delegate<Read2CallbackHelper>([is, cb](std::intptr_t nread, clv::Buffer buf,int pending){
-			cb(is, nread, buf,pending);
-		});
-		this->handle_->data = delegate_to_void(cbh);
-	
-		istream_self_ = is;
+		reading2_ = true;
+		read2_cb_ = cb;
 		try{
 			throw_if_error(uv_read2_start(this->get(), AllocCallbackRaw, Read2CallbackRaw));
 		}
 		catch (...){
-			istream_self_ = nullptr;
+			reading_ = false;
+			read_cb_ = nullptr;
+			throw;
 		}
-		*/
+
 	}
 
 	void Read2Stop(){
-		throw error_not_implemented();
-		/*
-		istream_self_ = nullptr;
-
-		uv_read_stop(this->get());
-		*/
+		uv_read2_stop(this->get());
+		reading2_ = false;
 	}
 
 	use<IWriteRequest> WriteRaw(clv::Buffer* bufs, int bufcnt, use<WriteCallback> cb){
@@ -788,6 +784,9 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 		return cr;
 	}
 
+	SocketOsType GetSocket(){
+		return this->socket;
+	}
 
 
 
@@ -883,6 +882,9 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 		receiving_ = false;
 	}
 
+	SocketOsType GetSocket(){
+		return this->socket;
+	}
 
 };
 

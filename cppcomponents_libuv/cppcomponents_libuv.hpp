@@ -904,7 +904,26 @@ namespace cppcomponents_libuv{
 
 			template<class F>
 			void Read2Start(F f){
-				this->get_interface().Read2StartRaw(cppcomponents::make_delegate<ReadCallback>(f));
+				this->get_interface().Read2StartRaw(cppcomponents::make_delegate<Read2Callback>(f));
+			}
+			cppcomponents::Channel<cppcomponents::use<IStream>> Read2StartWithChannel(){
+				typedef cppcomponents::use<IStream> c_t;
+				auto chan = cppcomponents::make_channel < c_t>();
+
+
+				auto f = [chan](use<IStream> stream, std::intptr_t nread, cppcomponents::use<cppcomponents::IBuffer> buf, int pending){
+					if (pending != Constants::HandleTypes::Unknown){
+						chan.Write(stream);
+					}
+					else{
+						chan.WriteError(nread<0?nread:-1);
+					}
+				};
+
+
+				Read2Start(f);
+
+				return chan;
 			}
 
 
@@ -973,6 +992,29 @@ namespace cppcomponents_libuv{
 				return Write(&s.at(0), s.size());
 			}
 
+			cppcomponents::use<cppcomponents::IFuture<int>> Write2(Buffer* bufs, int bufcnt, cppcomponents::use <IStream> handle){
+				auto p = cppcomponents::make_promise<int>();
+				auto func = [p](cppcomponents::use<IWriteRequest>, int status){
+					if (status < 0){
+						p.SetError(status);
+					}
+					else{
+						p.Set(status);
+					}
+				};
+				this->get_interface().Write2Raw(bufs, bufcnt,handle, cppcomponents::make_delegate<WriteCallback>(func) );
+				return p.QueryInterface<cppcomponents::IFuture<int>>();
+			}
+			cppcomponents::use < cppcomponents::IFuture < int >> Write2(cppcomponents::use <IStream> handle){
+
+				// Use dummy buffer, see libuv book example
+				Buffer dummy;
+				dummy.base = ".";
+				dummy.len = 1;
+
+				return Write2(&dummy, 1, handle);
+
+			}
 
 
 		};
@@ -1017,9 +1059,10 @@ namespace cppcomponents_libuv{
 		void Getsockname(sockaddr* name, int* namelen);
 		void Getpeername(sockaddr* name, int* namelen);
 		use<IConnectRequest> ConnectRaw(const sockaddr* address, cppcomponents::use<ConnectCallback>);
+		SocketOsType GetSocket();
 
 		CPPCOMPONENTS_CONSTRUCT(ITcpStream, Open,NoDelay,KeepAlive,SimultaneousAccepts,
-			BindRaw,Getsockname,Getpeername,ConnectRaw);
+			BindRaw,Getsockname,Getpeername,ConnectRaw,GetSocket);
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(ITcpStream){
 			cppcomponents::Future<int> Connect(SockAddrRef address){
@@ -1110,9 +1153,11 @@ namespace cppcomponents_libuv{
 			cppcomponents::use<UdpSendCallback> send_cb);
 		void RecvStartRaw(cppcomponents::use<UdpRecvCallback>);
 		void RecvStop();
+		SocketOsType GetSocket();
+
 
 		CPPCOMPONENTS_CONSTRUCT(IUdpStream, Open,BindRaw,GetSockname,SetMembership,
-			SetMulticastLoop,SetMulticastTtl,SetBroadcast,SetTtl,SendRaw,RecvStartRaw,RecvStop);
+			SetMulticastLoop,SetMulticastTtl,SetBroadcast,SetTtl,SendRaw,RecvStartRaw,RecvStop,GetSocket);
 
 
 		CPPCOMPONENTS_INTERFACE_EXTRAS(IUdpStream){

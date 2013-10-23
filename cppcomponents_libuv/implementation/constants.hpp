@@ -143,5 +143,57 @@ namespace cppcomponents_libuv{
 	};
 	}
 
+	namespace HandleTypes{
+//#define UV_HANDLE_TYPE_MAP(XX)                                                \
+//	XX(ASYNC, async)                                                            \
+//	XX(CHECK, check)                                                            \
+//	XX(FS_EVENT, fs_event)                                                      \
+//	XX(FS_POLL, fs_poll)                                                        \
+//	XX(HANDLE, handle)                                                          \
+//	XX(IDLE, idle)                                                              \
+//	XX(NAMED_PIPE, pipe)                                                        \
+//	XX(POLL, poll)                                                              \
+//	XX(PREPARE, prepare)                                                        \
+//	XX(PROCESS, process)                                                        \
+//	XX(STREAM, stream)                                                          \
+//	XX(TCP, tcp)                                                                \
+//	XX(TIMER, timer)                                                            \
+//	XX(TTY, tty)                                                                \
+//	XX(UDP, udp)                                                                \
+//	XX(SIGNAL, signal)
+
+
+//		typedef enum {
+//			UV_UNKNOWN_HANDLE = 0,
+//#define XX(uc, lc) UV_##uc,
+//			UV_HANDLE_TYPE_MAP(XX)
+//#undef XX
+//			UV_FILE,
+//			UV_HANDLE_TYPE_MAX
+//		} uv_handle_type;
+
+		enum{
+			Unknown = 0,
+			Async,
+			Check,
+			FsEvent,
+			FsPoll,
+			Handle,
+			Idle,
+			NamedPipe,
+			Poll,
+			Prepare,
+			Process,
+			Stream,
+			Tcp,
+			Timer,
+			Tty,
+			Udp,
+			Signal,
+			File,
+			TypeMax
+		};
+	}
+
 	}
 }
