@@ -127,6 +127,10 @@ struct ImpGetAddrinfoRequest
 
 
 };
+
+CPPCOMPONENTS_REGISTER(ImpGetAddrinfoRequest)
+
+
 struct ImpShutdownRequest
 	: public ImpRequest<ImpShutdownRequest, ShutdownRequest_t>
 {
@@ -163,6 +167,9 @@ struct ImpShutdownRequest
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpShutdownRequest)
+
+
 struct ImpWriteRequest
 	: public ImpRequest<ImpWriteRequest, WriteRequest_t>
 {
@@ -205,6 +212,9 @@ struct ImpWriteRequest
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpWriteRequest)
+
+
 struct ImpConnectRequest
 	: public ImpRequest<ImpConnectRequest, ConnectRequest_t>
 {
@@ -239,6 +249,8 @@ struct ImpConnectRequest
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpConnectRequest)
+
 
 struct ImpUdpSendRequest
 	: public ImpRequest<ImpUdpSendRequest, UdpSendRequest_t>
@@ -276,6 +288,7 @@ struct ImpUdpSendRequest
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpUdpSendRequest)
 
 struct ImpFsRequest
 	: public ImpRequest<ImpFsRequest, FsRequest_t>
@@ -334,6 +347,10 @@ struct ImpFsRequest
 
 };
 
+
+CPPCOMPONENTS_REGISTER(ImpFsRequest)
+
+
 struct ImpWorkRequest
 	: public ImpRequest<ImpWorkRequest, WorkRequest_t>
 {
@@ -379,7 +396,7 @@ struct ImpWorkRequest
 
 };
 
-
+CPPCOMPONENTS_REGISTER(ImpWorkRequest)
 
 
 
@@ -485,6 +502,8 @@ struct ImpHandleNonOwning :
 		}
 
 };
+CPPCOMPONENTS_REGISTER(ImpHandleNonOwning)
+
 
 struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 
@@ -565,7 +584,7 @@ struct ImpLoop : implement_runtime_class<ImpLoop, Loop_t>{
 
 
 };
-
+CPPCOMPONENTS_REGISTER(ImpLoop)
 
 void AllocCallbackRaw(uv_handle_t* handle, size_t suggested_size, uv_buf_t* ret){
 	try{
@@ -791,7 +810,7 @@ struct ImpTcpStream : uv_tcp_t, ImpStreamBase<uv_tcp_t,ImpTcpStream>, implement_
 
 
 };
-
+CPPCOMPONENTS_REGISTER(ImpTcpStream)
 struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement_runtime_class<ImpUdpStream, UdpStream_t>
 {
 	typedef ImpStreamBase<uv_udp_t, ImpUdpStream> imp_base_t;
@@ -887,7 +906,7 @@ struct ImpUdpStream : uv_udp_t, ImpStreamBase<uv_udp_t, ImpUdpStream>, implement
 	}
 
 };
-
+CPPCOMPONENTS_REGISTER(ImpUdpStream)
 
 struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement_runtime_class<ImpTtyStream, Tty_t>
 {
@@ -919,7 +938,7 @@ struct ImpTtyStream : uv_tty_t, ImpStreamBase<uv_tty_t, ImpTtyStream>, implement
 
 
 };
-
+CPPCOMPONENTS_REGISTER(ImpTtyStream)
 
 struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_class<ImpPipe, Pipe_t>
 {
@@ -952,7 +971,7 @@ struct ImpPipe : uv_pipe_t, ImpStreamBase<uv_pipe_t,ImpPipe>, implement_runtime_
 
 
 };
-
+CPPCOMPONENTS_REGISTER(ImpPipe)
 struct ImpPoll : uv_poll_t, ImpHandleBase<ImpPoll,uv_poll_t>, implement_runtime_class<ImpPoll, Poll_t>
 {
 	typedef ImpHandleBase<ImpPoll,uv_poll_t> imp_base_t;
@@ -1001,7 +1020,7 @@ struct ImpPoll : uv_poll_t, ImpHandleBase<ImpPoll,uv_poll_t>, implement_runtime_
 
 	
 };
-
+CPPCOMPONENTS_REGISTER(ImpPoll)
 struct ImpPrepare : uv_prepare_t, ImpHandleBase<ImpPrepare,uv_prepare_t>, implement_runtime_class<ImpPrepare, Prepare_t>
 {
 	typedef ImpHandleBase<ImpPrepare,uv_prepare_t> imp_base_t;
@@ -1048,6 +1067,7 @@ struct ImpPrepare : uv_prepare_t, ImpHandleBase<ImpPrepare,uv_prepare_t>, implem
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpPrepare)
 
 struct ImpCheck : uv_check_t, ImpHandleBase<ImpCheck, uv_check_t>, implement_runtime_class<ImpCheck, Check_t>
 {
@@ -1090,6 +1110,7 @@ struct ImpCheck : uv_check_t, ImpHandleBase<ImpCheck, uv_check_t>, implement_run
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpCheck)
 
 
 struct ImpIdle : uv_idle_t, ImpHandleBase<ImpIdle,uv_idle_t>, implement_runtime_class<ImpIdle, Idle_t>
@@ -1136,6 +1157,8 @@ struct ImpIdle : uv_idle_t, ImpHandleBase<ImpIdle,uv_idle_t>, implement_runtime_
 
 };
 
+CPPCOMPONENTS_REGISTER(ImpIdle)
+
 struct ImpAsync : uv_async_t, ImpHandleBase<ImpAsync,uv_async_t>, implement_runtime_class<ImpAsync, Async_t>
 {
 	typedef ImpHandleBase<ImpAsync,uv_async_t> imp_base_t;
@@ -1173,6 +1196,8 @@ struct ImpAsync : uv_async_t, ImpHandleBase<ImpAsync,uv_async_t>, implement_runt
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpAsync)
+
 
 struct ImpTimer :
 	uv_timer_t, ImpHandleBase<ImpTimer,uv_timer_t>, cppcomponents::implement_runtime_class<ImpTimer, Timer_t>{
@@ -1222,6 +1247,7 @@ struct ImpTimer :
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpTimer)
 
 struct ImpCpuInfo : implement_runtime_class<ImpCpuInfo, CpuInfo_t>{
 
@@ -1255,6 +1281,7 @@ struct ImpCpuInfo : implement_runtime_class<ImpCpuInfo, CpuInfo_t>{
 
 	
 };
+CPPCOMPONENTS_REGISTER(ImpCpuInfo)
 
 
 struct ImpInterfaceAddress : implement_runtime_class<ImpInterfaceAddress, InterfaceAddress_t>{
@@ -1284,6 +1311,11 @@ struct ImpInterfaceAddress : implement_runtime_class<ImpInterfaceAddress, Interf
 	}
 
 };
+
+
+CPPCOMPONENTS_REGISTER(ImpInterfaceAddress)
+
+
 
 void assure_null_terminated(cr_string s){
 	//if (s.size() && s[s.size() - 1] != 0)throw error_invalid_arg();
@@ -1479,6 +1511,7 @@ struct ImpUv : implement_runtime_class<ImpUv, Uv_t>{
 
 	ImpUv(){}
 };
+CPPCOMPONENTS_REGISTER(ImpUv)
 
 struct ImpProcessOptions : implement_runtime_class<ImpProcessOptions, ProcessOptions_t>
 {
@@ -1563,6 +1596,7 @@ struct ImpProcessOptions : implement_runtime_class<ImpProcessOptions, ProcessOpt
 	ImpProcessOptions()
 		: flags_{ 0 }, uid_{ 0 }, gid_{ 0 }{}
 };
+CPPCOMPONENTS_REGISTER(ImpProcessOptions)
 
 struct ImpStdioContainer : implement_runtime_class<ImpStdioContainer, StdioContainer_t>{
 
@@ -1597,6 +1631,8 @@ struct ImpStdioContainer : implement_runtime_class<ImpStdioContainer, StdioConta
 	ImpStdioContainer()
 		: flags_{ 0 }, bstream_{ false }, fd_{ 0 }{}
 };
+CPPCOMPONENTS_REGISTER(ImpStdioContainer)
+
 
 struct ImpProcess :uv_process_t, ImpHandleBase<ImpProcess,uv_process_t>, implement_runtime_class<ImpProcess, Process_t>
 {
@@ -1684,6 +1720,7 @@ struct ImpProcess :uv_process_t, ImpHandleBase<ImpProcess,uv_process_t>, impleme
 	}
 
 };
+CPPCOMPONENTS_REGISTER(ImpProcess)
 
 
 struct ImpFs : implement_runtime_class<ImpFs, Fs_t>{
@@ -1878,6 +1915,10 @@ struct ImpFs : implement_runtime_class<ImpFs, Fs_t>{
 
 };
 
+
+CPPCOMPONENTS_REGISTER(ImpFs)
+
+
 struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<ImpFsPoll,uv_fs_poll_t>, implement_runtime_class<ImpFsPoll, FsPoll_t>{
 	typedef ImpHandleBase<ImpFsPoll,uv_fs_poll_t> imp_base_t;
 	using imp_base_t::ReleaseImplementationDestroy;
@@ -1919,6 +1960,7 @@ struct ImpFsPoll : uv_fs_poll_t, ImpHandleBase<ImpFsPoll,uv_fs_poll_t>, implemen
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpFsPoll)
 
 
 struct ImpSignal :uv_signal_t,ImpHandleBase<ImpSignal,uv_signal_t>, implement_runtime_class<ImpSignal, Signal_t>{
@@ -1959,7 +2001,7 @@ struct ImpSignal :uv_signal_t,ImpHandleBase<ImpSignal,uv_signal_t>, implement_ru
 
 
 };
-
+CPPCOMPONENTS_REGISTER(ImpSignal)
 
 struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<ImpFsEvent,uv_fs_event_t>
 	, implement_runtime_class<ImpFsEvent, FsEvent_t>{
@@ -1994,6 +2036,9 @@ struct ImpFsEvent : uv_fs_event_t, ImpHandleBase<ImpFsEvent,uv_fs_event_t>
 
 };
 
+CPPCOMPONENTS_REGISTER(ImpFsEvent)
+
+
 struct ImpMutex : implement_runtime_class<ImpMutex, Mutex_t>{
 	uv_mutex_t mut_;
 	
@@ -2018,7 +2063,7 @@ struct ImpMutex : implement_runtime_class<ImpMutex, Mutex_t>{
 		uv_mutex_destroy(&mut_);
 	}
 };
-
+CPPCOMPONENTS_REGISTER(ImpMutex)
 struct ImpRwlock : implement_runtime_class<ImpRwlock, Rwlock_t>{
 
 	uv_rwlock_t h_;
@@ -2050,7 +2095,7 @@ struct ImpRwlock : implement_runtime_class<ImpRwlock, Rwlock_t>{
 		uv_rwlock_destroy(&h_);
 	}
 };
-
+CPPCOMPONENTS_REGISTER(ImpRwlock)
 
 struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor_t>{
 
@@ -2152,6 +2197,10 @@ struct ImpExecutor : cppcomponents::implement_runtime_class<ImpExecutor,Executor
 	}
 };
 
+
+CPPCOMPONENTS_REGISTER(ImpExecutor)
+
+
 struct ImpThreadPoolExecutor :implement_runtime_class<ImpThreadPoolExecutor, ThreadPoolExecutor_t>
 {
 	typedef cppcomponents::delegate < void() > ClosureType;
@@ -2193,6 +2242,7 @@ struct ImpThreadPoolExecutor :implement_runtime_class<ImpThreadPoolExecutor, Thr
 
 
 };
+CPPCOMPONENTS_REGISTER(ImpThreadPoolExecutor)
 
 CPPCOMPONENTS_DEFINE_FACTORY();
 
